@@ -33,19 +33,11 @@ if record['qty'] >= requested:
       'key': requestor,
       'val': { 'qty': requested, 'ts': long(time.time()) }
     }
-  ]
-  
+  ]  
   (key, meta, record) = client.operate(key, operations, meta, wpolicy)
-  
   # Assume some credit card auth happens here
-
   # Remove the reservation and add the ticket sale
   operations = [
-    {
-      'op' : aerospike.OPERATOR_WRITE,
-      'bin': "qty",
-      'val': record['qty'] - requested
-    },
     {
       'op' : aerospike.OP_LIST_APPEND,
       'bin' : "sold_to",
@@ -56,9 +48,13 @@ if record['qty'] >= requested:
       'bin' : "reservations",
       'key': requestor,
       'return_type': aerospike.MAP_RETURN_VALUE
+    },
+    {
+      'op' : aerospike.OP_LIST_APPEND,
+      'bin' : "pending",
+      'val' : { 'who': requestor, 'qty': requested}
     }
   ]
-
   client.operate(key, operations, meta, wpolicy)
 
 # Query results

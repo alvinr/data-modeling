@@ -38,7 +38,7 @@ client.put(("test", "products", kite['sku']), kite)
 
 
 lookup_key=[{'pickup_only': True}, {'pre_assembled': True} ]
-h = hashlib.new('ripemd160')
+h = hashlib.new("ripemd160")
 h.update(str(lookup_key))
 
 client.put(("test", "lookups", h.hexdigest()), 
