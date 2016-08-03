@@ -49,6 +49,14 @@ def match(key1, key2):
     m.append(record)
   return m
 
+# Find matches based on two criteria
+create_products()
+create_lookups()
+# Find the match
+matches = match("pre_assembled/True", "store_pickup_only/True")
+for m in matches:
+  print m  
+
 def create_hashed_lookups(product, lookup_key):
   lookup_key=[{'pickup_only': True}, {'pre_assembled': True} ]
   h = hashlib.new("ripemd160")
@@ -65,15 +73,7 @@ def match_hashed(product, lookup_key):
     m.append(record)
   return m
 
-# Find macthes based on two criteria
-create_products()
-create_lookups()
-# Find the match
-matches = match("pre_assembled/True", "store_pickup_only/True")
-for m in matches:
-  print m
-
-# Find macthes based on hased criteria
+# Find matches based on hashed criteria
 create_hashed_lookups()
 lookup_key=[{'pickup_only': True}, {'pre_assembled': True} ]
 # Find the match

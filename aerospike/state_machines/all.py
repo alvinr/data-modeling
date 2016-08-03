@@ -12,11 +12,11 @@ mpolicy = {'map_write_mode': aerospike.MAP_UPDATE}
 
 client = aerospike.client(config).connect()
 
-def account(device):
+def craete_account(device):
   client.put(("test", "accounts", device),
              {'tokens': {} } )
 
-def activation(event, device, service, token):
+def create_activation(event, device, service, token):
   client.put(("test", "events", event),
              { 'todo': [{'service': service, 'device': device, 'token': token }],
                'entitlement': [], 
@@ -45,8 +45,23 @@ def provision(device, service, token):
                    { 'token': token,
                      'ts': long(time.time()),
                      'status': "Waiting" },
-                   { 'map_write_mode': aerospike.MAP_UPDATE },
+                   { 'map_write_mode': aerospike.MAP_CREATE_ONLY},
                    meta, wpolicy)
+
+device_id = "ABC-123"
+service1 = "NBCSports"
+token = "MTOB1J"
+service2 = "ABC"
+
+# Provision the device
+create_account(device_id)
+provision(device_id, service1, token)
+(key, meta, record) = client.get(("test","accounts",device_id))
+print record
+
+provision(device_id, service2, "")
+(key, meta, record) = client.get(("test","accounts",device_id))
+print record
 
 def do_entitlement(device, service, token):
   (key, meta, record) = client.get(("test", "accounts", device_id))
@@ -77,6 +92,10 @@ def do_entitlement(device, service, token):
         # Record the attempt, even if the account is suspended
         client.put(key, {'last_logon_ts': long(time.time())})
 
+# Entitlement will move the state, incorrect Token
+do_entitlement(device_id, service1, "XYZ789")
+(key, meta, record) = client.get(("test","accounts",device_id))
+print record
 
 def process_todo(queue):
   (key, meta, record) = client.get(("test", "events", queue))
@@ -147,29 +166,8 @@ def process_entitlement(queue):
       do_entitlement(item['device'], item['service'], item['token'])
       client.list_pop(key, "entitlement", i, meta, wpolicy)    
 
-device_id = "ABC-123"
-service1 = "NBCSports"
-token = "MTOB1J"
-service2 = "ABC"
-
-
-# Provision the device
-account(device_id)
-provision(device_id, service1, token)
-(key, meta, record) = client.get(("test","accounts",device_id))
-print record
-
-provision(device_id, service2, "")
-(key, meta, record) = client.get(("test","accounts",device_id))
-print record
-
-# Entitlement will move the state, incorrect Token
-do_entitlement(device_id, service1, "XYZ789")
-(key, meta, record) = client.get(("test","accounts",device_id))
-print record
-
 # Create the activation event
-activation("new device", device_id, "NBCSports", token)
+create_activation("new device", device_id, "NBCSports", token)
 # Process the oustanding todo
 process_todo("new device")
 process_device("new device")
