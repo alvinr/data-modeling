@@ -12,20 +12,20 @@ wpolicy = {'gen': aerospike.POLICY_GEN_EQ}
 client = aerospike.client(config).connect()
 
 # Part Two - Fan out on write
-def post_msg_fan_out(sent_by, to, msg):
+def post_msg_fanout(sent_by, to, msg):
   recipients = to
   recipients.append(sent_by)
   post = {'msg': msg, 'from': sent_by, 'sent_ts': long(time.time())}
   for recipient in recipients:
     client.list_insert(("test", "msgs", recipient), "stream", 0, post)
 
-def get_inbox_fan_out(user):
+def get_inbox_fanout(user):
   (key, meta, record) = client.get(("test", "msgs", "Jane"))
   return record['stream']
 
 # Send message
-post_msg_fan_out("Joe", ["Bob", "Jane"], "Silly message...")
-post_msg_fan_out("Jane", ["Bob"], "My 1st message...")
+post_msg_fanout("Joe", ["Bob", "Jane"], "Silly message...")
+post_msg_fanout("Jane", ["Bob"], "My 1st message...")
 # Print the messages for "Jane"
 messages = get_inbox_fan_out("Jane")
 for msg in messages:
@@ -77,8 +77,3 @@ post_msg_bucketing("Jane", ["Joe"], "My 3rd message...")
 messages = get_inbox_bucketing("Jane")
 for msg in messages:
   print('{0}>> {1}'.format(msg['from'], msg['msg']))
-
-
-
-
-
