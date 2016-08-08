@@ -90,7 +90,7 @@ def check_availability_and_purchase(user, event, qty):
     ]
     client.operate(key, operations, meta, wpolicy)
 
-# Check availbaility before purchaing
+# Check availability before purchasing
 # No purchase, not enough stock
 for_event = "Womens 4x400m Final"
 create_event(for_event, 10)
@@ -111,6 +111,7 @@ def generate_order_id():
 def creditcard_auth(user):
   # TODO: Credit card auth happens here, but lets just sleep
   # return random.choice([True, False])
+  time.sleep(1)
   return True
 
 def backout_reservation(event, user, qty):
@@ -146,7 +147,8 @@ def reserve(user, event, qty):
         'val': { 'qty': qty, 'ts': long(time.time()) }
       }
     ]
-    (key, meta, record) = client.operate(key, operations, meta, wpolicy_map_create)
+    (key, meta, record) = client.operate(key, operations, meta, 
+                                         wpolicy_map_create)
     if creditcard_auth(user):
       # Remove the reservation and add the ticket sale
       operations = [
