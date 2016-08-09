@@ -56,7 +56,7 @@ def post_msg_bucketing(sent_by, to, msg):
 def get_inbox_bucketing(user):
   messages = []
   (key, meta, record) = client.get(("test", "users", user))
-  # Find all the buckets based on the total messages recieved
+  # Find all the buckets based on the total messages received
   for i in range(calc_bucket(record['total']), 0, -1):
     bucket_key = {'user': user, 'seq': i}
     h = hashlib.new("ripemd160")
