@@ -8,7 +8,7 @@ config = { 'hosts': [(os.environ.get("AEROSPIKE_HOST", "127.0.01"), 3000)],
            'policies': { 'key': aerospike.POLICY_KEY_SEND }
 }
 wpolicy = {'gen': aerospike.POLICY_GEN_EQ}
-mpolicy = {'map_write_mode': aerospike.MAP_UPDATE}
+mpolicy_create = {'map_write_mode': aerospike.MAP_UPDATE}
 
 client = aerospike.client(config).connect()
 
@@ -73,7 +73,7 @@ def do_entitlement(device, service, token):
         service_rec['last_logon_ts'] = long(time.time())
         service_rec['status'] = 'Active'
         client.map_put(key, "tokens", service, service_rec,
-                       mpolicy, meta, wpolicy)
+                       mpolicy_create, meta, wpolicy)
     else:
       if service_rec['status'] in ["Waiting", "Suspended"]:
         if service_rec['failed'] < 3:
@@ -81,13 +81,13 @@ def do_entitlement(device, service, token):
           service_rec['failed'] +=1
           service_rec['last_logon_ts'] = long(time.time())
           client.map_put(key, "tokens", service, service_rec,
-                         mpolicy, meta, wpolicy)
+                         mpolicy_create, meta, wpolicy)
         else:
           # Exceeded limit
           service_rec['status'] = "Suspended"
           service_rec['last_logon_ts'] = long(time.time())
           client.map_put(key, "tokens", service, service_rec,
-                         mpolicy, meta, wpolicy)
+                         mpolicy_create, meta, wpolicy)
       else:
         # Record the attempt, even if the account is suspended
         client.put(key, {'last_logon_ts': long(time.time())})

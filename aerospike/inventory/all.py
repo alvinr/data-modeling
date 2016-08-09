@@ -8,9 +8,7 @@ config = {'hosts': [(os.environ.get('AEROSPIKE_HOST', '127.0.01'), 3000)],
           'policies': { 'key': aerospike.POLICY_KEY_SEND }
 }
 wpolicy = {'gen': aerospike.POLICY_GEN_EQ}
-map_create_policy = { 'map_write_mode': aerospike.MAP_CREATE_ONLY }
-wpolicy_map_create = wpolicy.copy()
-wpolicy_map_create.update(map_create_policy)
+mpolicy_create = { 'map_write_mode': aerospike.MAP_CREATE_ONLY }
 
 client = aerospike.client(config).connect()
 
@@ -144,11 +142,11 @@ def reserve(user, event, qty):
         'op' : aerospike.OP_MAP_PUT,
         'bin': "reservations",
         'key': user,
-        'val': { 'qty': qty, 'ts': long(time.time()) }
+        'val': { 'qty': qty, 'ts': long(time.time()) },
+        'map_policy': mpolicy_create
       }
     ]
-    (key, meta, record) = client.operate(key, operations, meta, 
-                                         wpolicy_map_create)
+    (key, meta, record) = client.operate(key, operations, meta, wpolicy)
     if creditcard_auth(user):
       # Remove the reservation and add the ticket sale
       operations = [
@@ -228,10 +226,11 @@ def reserve_with_pending(user, event, qty):
         'op' : aerospike.OP_MAP_PUT,
         'bin': "reservations",
         'key': user,
-        'val': { 'qty': qty, 'ts': long(time.time()) }
+        'val': { 'qty': qty, 'ts': long(time.time()) },
+        'map_policy': mpolicy_create
       }
     ]
-    (key, meta, record) = client.operate(key, operations, meta, wpolicy_map_create)
+    (key, meta, record) = client.operate(key, operations, meta, wpolicy)
     if creditcard_auth(user):
       # Remove the reservation and add the ticket sale
       order_id = generate_order_id()

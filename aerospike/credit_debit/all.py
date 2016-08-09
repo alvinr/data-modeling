@@ -27,20 +27,6 @@ create_account("Mum", 150)
 simple_debit_credit("Mum", "Dad", 100)
 
 # Part Two - Workflow
-def generate_transaction_id():
-  return ''.join(random.choice(string.ascii_uppercase + string.digits) \
-    for _ in range(6))
-
-def start_debit_credit(from_account, to_account, amount):
-  tx_id = generate_transaction_id()
-  client.put(("test", "txs", tx_id), 
-             {'from': from_account,
-              'to': to_account, 
-              'amt': amount, 
-              'state': "Begin",
-              'ts': long(time.time())})
-  return tx_id
-
 def transition_state(tx_id, from_state, to_state):
   (key_current, meta_current, record_current) = client.select(("test", "txs", tx_id), ["state"])
   if record_current['state'] == from_state:
@@ -85,12 +71,12 @@ def check_funding(tx_id, from_account, amt):
     transition_state(tx_id, "Begin", "Approved")
     return (meta, True)
   else:
-    print("{0}: Insufficient funds account:'{1}' amount:{2}".format(tx_id, from_account, amt))
     return (meta, False)
 
 def process_insufficient_funds(tx_id):
   transition_state(tx_id, "Begin", "Insufficient Funds")
-  print('{0}: Insufficient funds available'.format(tx_id))
+  (_, _, record) = client.select(("test", "txs", tx_id), ["from", "amt"])
+  print("{0}: Insufficient funds account:'{1}' amount:{2}".format(tx_id, record['from'], record['amt']))
 
 def process_debit(tx_id, from_account, to_account, amount):
   (_, _, record) = client.select(("test", "txs", tx_id), ["state"])
@@ -150,10 +136,21 @@ def process_credit(tx_id, from_account, to_account, amount):
     #TODO: If the map already exists, then in >= 3.9.1 an exception will be thrown
     (_, _, record) = client.operate(key, operations, meta, wpolicy)
     transition_state(tx_id, "Debited", "Credited")
-    print("{0}: Credited to:'{1}', amount:{2}, balance:{3}".format(tx_id,
-                                                                   to_account, 
-                                                                   amount, 
-                                                                   record['balance']))
+    print("{0}: Credited to:'{1}', amount:{2}, balance:{3}".format(tx_id, to_account, amount, record['balance']))
+
+def generate_transaction_id():
+  return ''.join(random.choice(string.ascii_uppercase + string.digits) \
+    for _ in range(6))
+
+def start_debit_credit(from_account, to_account, amount):
+  tx_id = generate_transaction_id()
+  client.put(("test", "txs", tx_id), 
+             {'from': from_account,
+              'to': to_account, 
+              'amt': amount, 
+              'state': "Begin",
+              'ts': long(time.time())})
+  return tx_id
 
 create_account("Daughter", 0)
 create_account("Son", 200)
