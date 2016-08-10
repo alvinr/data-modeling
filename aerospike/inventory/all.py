@@ -43,7 +43,7 @@ def purchase(user, event, qty):
   operations = [
     {
       'op' : aerospike.OPERATOR_WRITE,
-      'bin': "qty",
+      'bin': "available",
       'val': record['available'] - qty
     },
     {

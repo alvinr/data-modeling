@@ -41,6 +41,7 @@ def create_lookups():
              { 'products': [ "123-ABC-723"] })
 
 def match(key1, key2):
+  m = []
   (key1, meta1, record1) = client.get(("test","lookups",key1))
   (key2, meta2, record2) = client.get(("test","lookups",key2))
   matches = list(set(record1['products']) & set(record2['products']))
@@ -57,14 +58,14 @@ matches = match("pre_assembled/True", "store_pickup_only/True")
 for m in matches:
   print m  
 
-def create_hashed_lookups(product, lookup_key):
-  lookup_key=[{'pickup_only': True}, {'pre_assembled': True} ]
+def create_hashed_lookups(lookup_key, products):
   h = hashlib.new("ripemd160")
   h.update(str(lookup_key))
   client.put(("test", "lookups", h.hexdigest()), 
-             { 'products': ["123-ABC-723"]})
+             { 'products': products})
 
-def match_hashed(product, lookup_key):
+def match_hashed(lookup_key):
+  m = []
   h = hashlib.new("ripemd160")
   h.update(str(lookup_key))
   (key, meta, found) = client.get(("test", "lookups", h.hexdigest()))
@@ -74,8 +75,8 @@ def match_hashed(product, lookup_key):
   return m
 
 # Find matches based on hashed criteria
-create_hashed_lookups()
 lookup_key=[{'pickup_only': True}, {'pre_assembled': True} ]
+create_hashed_lookups(lookup_key, ["123-ABC-723"])
 # Find the match
 matches = match_hashed(lookup_key)
 for m in matches:

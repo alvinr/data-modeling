@@ -12,7 +12,7 @@ mpolicy_create = {'map_write_mode': aerospike.MAP_UPDATE}
 
 client = aerospike.client(config).connect()
 
-def craete_account(device):
+def create_account(device):
   client.put(("test", "accounts", device),
              {'tokens': {} } )
 
@@ -48,7 +48,7 @@ def provision(device, service, token):
                    { 'map_write_mode': aerospike.MAP_CREATE_ONLY},
                    meta, wpolicy)
 
-device_id = "ABC-123"
+device_id = "ATV-123"
 service1 = "NBCSports"
 token = "MTOB1J"
 service2 = "ABC"
@@ -93,7 +93,7 @@ def do_entitlement(device, service, token):
         client.put(key, {'last_logon_ts': long(time.time())})
 
 # Entitlement will move the state, incorrect Token
-do_entitlement(device_id, service1, "XYZ789")
+do_entitlement(device_id, service1, token)
 (key, meta, record) = client.get(("test","accounts",device_id))
 print record
 
@@ -168,9 +168,10 @@ def process_entitlement(queue):
 
 # Create the activation event
 create_activation("new device", device_id, "NBCSports", token)
-# Process the oustanding todo
+# Process the outstanding todo
 process_todo("new device")
 process_device("new device")
 process_entitlement("new device")
-
+(key, meta, record) = client.get(("test","accounts",device_id))
+print record
 

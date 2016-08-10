@@ -27,7 +27,7 @@ def get_inbox_fanout(user):
 post_msg_fanout("Joe", ["Bob", "Jane"], "Silly message...")
 post_msg_fanout("Jane", ["Bob"], "My 1st message...")
 # Print the messages for "Jane"
-messages = get_inbox_fan_out("Jane")
+messages = get_inbox_fanout("Jane")
 for msg in messages:
   print('{0}>> {1}'.format(msg['from'], msg['msg']))
 
