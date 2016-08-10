@@ -13,5 +13,7 @@ def clean():
     cleanOneSet("test", "accounts")
     cleanOneSet("test", "msgs")
     cleanOneSet("test", "txs")
-
+    cleanOneSet("test", "parts")
+    cleanOneSet("test", "locations")
+    cleanOneSet("test", "xfers")
 
