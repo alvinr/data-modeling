@@ -21,7 +21,8 @@ def create_user(user):
 # Part Zero - Purchase as two writes
 def simple_purchase(user, event, qty):
   (key, meta, record) = client.get(("test", "events", event))
-  client.put(("test", "events", event), {'available': record['available'] - qty})
+  client.put( key, {'available': record['available'] - qty},
+              {}, wpolicy)
   purchase = { "event": event, 'qty': qty }
   client.list_append(("test", "users", user), "purchased", purchase)
 
@@ -102,32 +103,6 @@ check_availability_and_purchase(requestor, for_event, 9)
 print record
 
 # Part Three - Reserve stock
-def generate_order_id():
-  return ''.join(random.choice(string.ascii_uppercase + string.digits) \
-    for _ in range(6))
-
-def creditcard_auth(user):
-  # TODO: Credit card auth happens here, but lets just sleep
-  # return random.choice([True, False])
-  time.sleep(1)
-  return True
-
-def backout_reservation(event, user, qty):
-  operations = [
-    {
-      'op' : aerospike.OPERATOR_INCR,
-      'bin': "available",
-      'val': qty
-    },
-    {
-      'op' : aerospike.OP_MAP_REMOVE_BY_KEY,
-      'bin' : "reservations",
-      'key': user,
-      'return_type': aerospike.MAP_RETURN_NONE
-    }
-  ]
-  client.operate(("test", "events", event), operations)
-
 def reserve(user, event, qty):
   (key, meta, record) = client.get(("test","events",event))
   if record['available'] >= qty:
@@ -166,6 +141,32 @@ def reserve(user, event, qty):
     else:
       # Back out the reservation on a credit card decline
       backout_reservation(event, user, qty)
+
+def generate_order_id():
+  return ''.join(random.choice(string.ascii_uppercase + string.digits) \
+    for _ in range(6))
+
+def creditcard_auth(user):
+  # TODO: Credit card auth happens here, but lets just sleep
+  # return random.choice([True, False])
+  time.sleep(1)
+  return True
+
+def backout_reservation(event, user, qty):
+  operations = [
+    {
+      'op' : aerospike.OPERATOR_INCR,
+      'bin': "available",
+      'val': qty
+    },
+    {
+      'op' : aerospike.OP_MAP_REMOVE_BY_KEY,
+      'bin' : "reservations",
+      'key': user,
+      'return_type': aerospike.MAP_RETURN_NONE
+    }
+  ]
+  client.operate(("test", "events", event), operations)
 
 # Query results
 for_event = "Womens Marathon Final"

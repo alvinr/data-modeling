@@ -75,7 +75,7 @@ def match_hashed(lookup_key):
   return m
 
 # Find matches based on hashed criteria
-lookup_key=[{'pickup_only': True}, {'pre_assembled': True} ]
+lookup_key={'pickup_only': True, 'pre_assembled': True}
 create_hashed_lookups(lookup_key, ["123-ABC-723"])
 # Find the match
 matches = match_hashed(lookup_key)
