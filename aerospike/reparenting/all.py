@@ -35,7 +35,6 @@ def create_location(name, type, part):
   ]
   client.operate(("test", "locations", name), operations)
 
-
 def create_part(part, location):
   client.put(("test", "parts", part), {'location': location})
 
@@ -120,9 +119,11 @@ def process_xfer_in(location):
         client.put(("test", "xfers", xfer_key), {'xfer_in': "Done"})
 
 def complete_xfer(xfer):
-  (key, meta, record) = client.get(("test", "xfers", xfer))
-  if ( record['xfer_in'] == "Done" and record['xfer_out'] == "Done" ):
-    client.put(key, {'status': "Finished"})
+  (key, meta, xfer_record) = client.get(("test", "xfers", xfer))
+  if ( xfer_record['xfer_in'] == "Done" and xfer_record['xfer_out'] == "Done" ):
+    client.put(key, {'status': "Finished"}, meta, wpolicy)
+    (key, meta, part_record) = client.get(("test", "parts", xfer_record['part']))
+    client.put(key, {'location': xfer_record['to_loc']}, meta, wpolicy)
 
 # Create parts & locations
 part = "8BQWQM"
