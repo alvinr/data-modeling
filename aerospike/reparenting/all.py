@@ -9,7 +9,7 @@ import copy
 config = {'hosts': [(os.environ.get('AEROSPIKE_HOST', '127.0.01'), 3000)],
           'policies': { 'key': aerospike.POLICY_KEY_SEND }
 }
-wpolicy = {'gen': aerospike.POLICY_GEN_EQ}
+wpolicy = {'gen': aerospike.POLICY_GEN_EQ, 'key': aerospike.POLICY_KEY_SEND}
 mpolicy_create = { 'map_write_mode': aerospike.MAP_CREATE_ONLY }
 
 client = aerospike.client(config).connect()
@@ -33,42 +33,48 @@ def create_location(name, type, part):
       'val': {}
     }
   ]
-  client.operate(("test", "locations", name), operations)
+  client.operate(("test", "locations", name), operations, {}, wpolicy)
 
 def create_part(part, location):
-  client.put(("test", "parts", part), {'location': location})
+  client.put(("test", "parts", part), {'location': location}, {}, wpolicy)
 
 def start_transfer(part, from_loc, to_loc):
   xfer = generate_xfer()
-  client.put(("test", "xfers", xfer), {'status': "Started",
-                                       'xfer_out': "Ready",
-                                       'xfer_in': "Ready",
-                                       'from_loc': from_loc,
-                                       'to_loc': to_loc,
-                                       'part': part, 
-                                       'ts': long(time.time())})
+  client.put( ("test", "xfers", xfer),
+              { 'status': "Started",
+                'xfer_out': "Ready",
+                'xfer_in': "Ready",
+                'from_loc': from_loc,
+                'to_loc': to_loc,
+                'part': part, 
+                'ts': long(time.time())},
+              {}, wpolicy)
   return xfer
 
 def add_transfer_requests(xfer):
   (key, meta, record) = client.get(("test", "xfers", xfer))
   if record['xfer_out'] == "Ready":
-    client.map_put(("test", "locations", record['from_loc']),
-                   "xfers",
-                   xfer,
-                   {'part': record['part'],
-                    'to_loc': record['to_loc'],
-                    'xfer_in': "",
-                    'xfer_out': "Requested"})
+    client.map_put( ("test", "locations", record['from_loc']),
+                    "xfers",
+                    xfer,
+                    { 'part': record['part'],
+                      'to_loc': record['to_loc'],
+                      'xfer_in': "",
+                      'xfer_out': "Requested"},
+                    {},
+                    wpolicy)
   if record['xfer_in'] == "Ready":
     in_rec = copy.copy(record)
     in_rec['xfer_in'] = "Requested"
-    client.map_put(("test", "locations", record['to_loc']),
-                   "xfers",
-                   xfer,
-                   {'part': record['part'],
-                    'from_loc': record['from_loc'],
-                    'xfer_in': "Requested",
-                    'xfer_out': ""})
+    client.map_put( ("test", "locations", record['to_loc']),
+                     "xfers",
+                    xfer,
+                    { 'part': record['part'],
+                      'from_loc': record['from_loc'],
+                      'xfer_in': "Requested",
+                      'xfer_out': ""},
+                    {},
+                    wpolicy)
 
 def process_xfer_out(location):
   (key, meta, record) = client.get(("test", "locations", location))
@@ -92,7 +98,7 @@ def process_xfer_out(location):
         ]
         (key, meta, record) = client.operate(key, operations, meta, wpolicy)
         # Update the xfer record  
-        client.put(("test", "xfers", xfer_key), {'xfer_out': "Done"})
+        client.put(("test", "xfers", xfer_key), {'xfer_out': "Done"}, {}, wpolicy)
 
 def process_xfer_in(location):
   (key, meta, record) = client.get(("test", "locations", location))
@@ -116,14 +122,16 @@ def process_xfer_in(location):
         ]
         (key, meta, record) = client.operate(key, operations, meta, wpolicy)
         # Update the xfer record
-        client.put(("test", "xfers", xfer_key), {'xfer_in': "Done"})
+        client.put(("test", "xfers", xfer_key), {'xfer_in': "Done"}, {}, wpolicy)
 
 def complete_xfer(xfer):
-  (key, meta, xfer_record) = client.get(("test", "xfers", xfer))
-  if ( xfer_record['xfer_in'] == "Done" and xfer_record['xfer_out'] == "Done" ):
-    client.put(key, {'status': "Finished"}, meta, wpolicy)
-    (key, meta, part_record) = client.get(("test", "parts", xfer_record['part']))
-    client.put(key, {'location': xfer_record['to_loc']}, meta, wpolicy)
+  (xfer_key, xfer_meta, xfer_record) = client.get(("test", "xfers", xfer))
+  if ( xfer_record['xfer_in'] == "Done" and 
+       xfer_record['xfer_out'] == "Done" and
+       xfer_record['status'] != 'Finished' ):
+    (part_key, part_meta, part_record) = client.get(("test", "parts", xfer_record['part']))
+    client.put(part_key, {'location': xfer_record['to_loc']}, part_meta, wpolicy)
+    client.put(xfer_key, {'status': "Finished"}, xfer_meta, wpolicy)
 
 # Create parts & locations
 part = "8BQWQM"
