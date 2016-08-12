@@ -185,7 +185,7 @@ def create_expired_reservation(event):
                                     },
                                     'Jim': { 
                                       'qty': 7, 
-                                      'ts': long(time.time() - 30)
+                                      'ts': long(time.time() - 50)
                                     },
                                     'Amy': { 
                                       'qty': 19, 
