@@ -70,7 +70,6 @@ purchase(requestor, for_event, 500)
 (key, meta, record) = client.get(("test", "events", for_event))
 print record
 
-
 # Part Two - Check availability
 def check_availability_and_purchase(user, event, qty):
   (key, meta, record) = client.get(("test","events",for_event))
@@ -137,10 +136,10 @@ def reserve(user, event, qty):
           'return_type': aerospike.MAP_RETURN_VALUE
         }
       ]
-      client.operate(key, operations)
+      client.operate(key, operations, meta, wpolicy)
     else:
       # Back out the reservation on a credit card decline
-      backout_reservation(event, user, qty)
+      backout_reservation(key, meta, user, qty)
 
 def generate_order_id():
   return ''.join(random.choice(string.ascii_uppercase + string.digits) \
@@ -152,7 +151,7 @@ def creditcard_auth(user):
   time.sleep(1)
   return True
 
-def backout_reservation(event, user, qty):
+def backout_reservation(key, meta, user, qty):
   operations = [
     {
       'op' : aerospike.OPERATOR_INCR,
@@ -166,7 +165,7 @@ def backout_reservation(event, user, qty):
       'return_type': aerospike.MAP_RETURN_NONE
     }
   ]
-  client.operate(("test", "events", event), operations)
+  return client.operate(key, operations, meta, wpolicy)
 
 # Query results
 for_event = "Womens Marathon Final"
@@ -202,7 +201,7 @@ def expire_reservation(event):
   for i in record["reservations"]:
     res = record["reservations"][i]
     if res["ts"] < cutoff_ts:
-      backout_reservation(event, i, res['qty'])
+      (key, meta, _) = backout_reservation(key, meta, i, res['qty'])
 
 # Expire reservations
 for_event = "Womens Javelin"
@@ -256,7 +255,7 @@ def reserve_with_pending(user, event, qty):
       client.operate(key, operations)
     else:
       # Back out the reservation on a credit card decline
-      backout_reservation(event, user, qty)
+      backout_reservation(key, meta, user, qty)
 
 def post_purchases(event):
   (key, meta, record) = client.get(("test","events",event))
