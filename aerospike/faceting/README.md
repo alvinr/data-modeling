@@ -1,7 +1,7 @@
 # Faceted Queries
 Faceting is a pattern that can be applied to many domain problems. Let's stick with a really obvious problem: you have a product catalog that you need to query on a distinct set of attributes. Let's start with a schema in JSON:
 
-```json
+```
 products:
   { sku: "123-ABC-723",
     name: "Wheelbarrow",
@@ -19,7 +19,7 @@ In an RDBMS, you may be tempted to create secondary indexes on any attribute you
 # Faceting
 Faceting is just simply turning each of these possible secondary index queries into a multiple primary key lookups. So let's look at a possible JSON schema:
 
-```json
+```
 products:
   { sku: "123-ABC-723", name: "Wheelbarrow", pre_assembled: True, pickup_only: True, weight_in_kg: 12, category: ["Garden", "Tool"] }
   { sku: "737-DEF-911", name: "Bicycle Pump", pre_assembled: True, pickup_only: False, weight_in_kg: 0.5, category: ["Tool"] }
@@ -106,7 +106,7 @@ for m in matches:
 
 We can use the inbuilt list manipulation built into most languages to find the intersection, see code in bold above. Running the code, you will see the following printed:
 
-```json
+```
 products:
   { 'sku': '123-ABC-723', 
     'category': ['Garden', 'Tool'], 
@@ -162,7 +162,7 @@ The function ```create_hased_lookups``` is creating a hash (using RIPEMD­160) o
 
 Running the code, you will see the matching product printed:
 
-```json
+```
 products:
   { 'sku': '123-ABC-723', 
     'category': ['Garden', 'Tool'], 
