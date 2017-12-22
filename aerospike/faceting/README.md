@@ -2,9 +2,13 @@
 Faceting is a pattern that can be applied to many domain problems. Let's stick with a really obvious problem: you have a product catalog that you need to query on a distinct set of attributes. Let's start with a schema in JSON:
 
 ```json
-products: { sku: "123-ABC-723", name: "Wheelbarrow", pre_assembled: True,
-weight_in_kg: 12,
-category: ["Garden", "Tool"] }
+products:
+  { sku: "123-ABC-723",
+    name: "Wheelbarrow",
+    pre_assembled: True,
+    weight_in_kg: 12,
+    category: ["Garden", "Tool"]
+  }
 ```
 
 Let's assume that SKU (Stock Keeping Unit) is the Primary Key. If we know the Primary Key, then we get a direct lookup in order to get the record. But how many of us remember the SKU of any product we want to buy? You are likely to want to find the product through some other criteria, like its name, or whether it's in a particular product category.
@@ -17,24 +21,15 @@ Faceting is just simply turning each of these possible secondary index queries i
 
 ```json
 products:
-products: { sku: "123-ABC-723", name: "Wheelbarrow", pre_assembled: True,
-weight_in_kg: 12,
-category: ["Garden", "Tool"] }
-{ sku: "123-ABC-723", name: "Wheelbarrow", pre_assembled: True,
-pickup_only: True, weight_in_kg: 12,
-category: ["Garden", "Tool"]
-}
-{ sku: "737-DEF-911", name: "Bicycle Pump",
-pre_assembled: True, pickup_only: False, weight_in_kg: 0.5, category: ["Tool"]
-}
-{ sku: "320-GHI-921", name: "Kite",
-pre_assembled: False, pickup_only: False, weight_in_kg: 0.5, category: ["Toy"]
-}
+  { sku: "123-ABC-723", name: "Wheelbarrow", pre_assembled: True, pickup_only: True, weight_in_kg: 12, category: ["Garden", "Tool"] }
+  { sku: "737-DEF-911", name: "Bicycle Pump", pre_assembled: True, pickup_only: False, weight_in_kg: 0.5, category: ["Tool"] }
+  { sku: "320-GHI-921", name: "Kite", pre_assembled: False, pickup_only: False, weight_in_kg: 0.5, category: ["Toy"] }
+
 lookups:
-{ key: "category/Tool", products: [ "123-ABC-723", "737-DEF-911" ] }
-{ key: "category/Garden", products: [ "123-ABC-723"] }
-{ key: "category/Toy", products: [ "320-GHI-921" ] }
-{ key: "pre_assembled/True", products: [ "123-ABC-723", "737-DEF-911"] }
+  { key: "category/Tool", products: [ "123-ABC-723", "737-DEF-911" ] }
+  { key: "category/Garden", products: [ "123-ABC-723"] }
+  { key: "category/Toy", products: [ "320-GHI-921" ] }
+  { key: "pre_assembled/True", products: [ "123-ABC-723", "737-DEF-911"] }
 ```
 
 So if we are looking for a product in the category of "Tool", we can perform a Primary Key query on lookupswith the value "category/Tool". This returns a record with an encapsulated set of product SKUs. We can then iterate through the productslist and perform Primary Key lookups for each product.
@@ -47,46 +42,79 @@ But what about filtering on multiple attributes? This is a typical query, so tak
 There are a couple of ways to achieve this. We could could perform two queries, and then find the intersection. Here's an example of doing that in Python:
 
 ```python
-import aerospike import os import hashlib
+import aerospike
+import os
+import hashlib
+
 config = { 'hosts': [(os.environ.get("AEROSPIKE_HOST", "127.0.01"), 3000)],
-'policies': { 'key': aerospike.POLICY_KEY_SEND } client = aerospike.client(config).connect()
+           'policies': { 'key': aerospike.POLICY_KEY_SEND }
+}
+
+client = aerospike.client(config).connect()
+
 def create_products():
-wheelbarrow = { 'sku': "123-ABC-723", 'name': "Wheelbarrow", 'pre_assembled': True,
-}
-pump =
-kite =
-'pickup_only': True, 'weight_in_kg': 12, 'category': ["Garden", "Tool"]
-}
-{ 'sku': "737-DEF-911",
-'name': "Bicycle Pump", 'pre_assembled': True, 'pickup_only': False, 'weight_in_kg': 0.5, 'category': ["Tool"]
-}
-{ 'sku': "320-GHI-921",
-'name': "Kite", 'pre_assembled': False, 'pickup_only': False, 'weight_in_kg': 0.5, 'category': ["Toy"]
-}
-client.put(("test", "products", wheelbarrow['sku']), wheelbarrow) client.put(("test", "products", pump['sku']), pump) client.put(("test", "products", kite['sku']), kite)
+  wheelbarrow = { 'sku': "123-ABC-723",
+                  'name': "Wheelbarrow",
+                  'pre_assembled': True,
+                  'pickup_only': True,
+                  'weight_in_kg': 12,
+                  'category': ["Garden", "Tool"]
+                }
+  pump =        { 'sku': "737-DEF-911",
+                  'name': "Bicycle Pump",
+                  'pre_assembled': True,
+                  'pickup_only': False,
+                  'weight_in_kg': 0.5,
+                  'category': ["Tool"]
+                }
+  kite =        { 'sku': "320-GHI-921",
+                  'name': "Kite",
+                  'pre_assembled': False,
+                  'pickup_only': False,
+                  'weight_in_kg': 0.5,
+                  'category': ["Toy"]
+                }
+  client.put(("test", "products", wheelbarrow['sku']), wheelbarrow)
+  client.put(("test", "products", pump['sku']), pump)
+  client.put(("test", "products", kite['sku']), kite)
+
 def create_lookups():
-client.put(("test", "lookups", "pre_assembled/True"),
-{ 'products': [ "123-ABC-723", "737-DEF-911"] })
-client.put(("test", "lookups", "store_pickup_only/True"), { 'products': [ "123-ABC-723"] })
+  client.put(("test", "lookups", "pre_assembled/True"), 
+             { 'products': [ "123-ABC-723", "737-DEF-911"] })
+  client.put(("test", "lookups", "store_pickup_only/True"), 
+             { 'products': [ "123-ABC-723"] })
+
 def match(key1, key2):
-m = []
-(key1, meta1, record1) = client.get(("test","lookups",key1))
-(key2, meta2, record2) = client.get(("test","lookups",key2))
-matches = list(set(record1['products']) & set(record2['products']))
-for sku in matches:
-(key, meta, record) = client.get(("test", "products", sku)) m.append(record)
-return m
-# Find matches based on two criteria create_products()
+  m = []
+  (key1, meta1, record1) = client.get(("test","lookups",key1))
+  (key2, meta2, record2) = client.get(("test","lookups",key2))
+  matches = list(set(record1['products']) & set(record2['products']))
+  for sku in matches:
+    (key, meta, record) = client.get(("test", "products", sku))
+    m.append(record)
+  return m
+
+# Find matches based on two criteria
+create_products()
 create_lookups()
 # Find the match
-matches = match("pre_assembled/True", "store_pickup_only/True") for m in matches:
-print m
+matches = match("pre_assembled/True", "store_pickup_only/True")
+for m in matches:
+  print m  
+
 ```
 
 We can use the inbuilt list manipulation built into most languages to find the intersection, see code in bold above. Running the code, you will see the following printed:
 
 ```json
-{'sku': '123-ABC-723', 'category': ['Garden', 'Tool'], 'name': 'Wheelbarrow', 'pre_assembled': True, 'pickup_only': True, 'weight_in_kg': 12}
+products:
+  { 'sku': '123-ABC-723', 
+    'category': ['Garden', 'Tool'], 
+    'name': 'Wheelbarrow', 
+    'pre_assembled': True, 
+    'pickup_only': True, 
+    'weight_in_kg': 12
+  }
 ```
 
 While this adds a lot of complexity, as you need to calculate the intersection of the results of each query, it’s still a reasonable, scalable solution. But how can we remove the need to find the intersection in the client code, especially if each of those lists starts to get really big?
@@ -96,29 +124,38 @@ In effect, what we are doing is creating a compound key. This is something that 
 
 ```json
 lookups:
-{ key: {pre_assembled: True, pickup_only: True},
-products: [ "123-ABC-723"] }
+  { key: {pre_assembled: True, pickup_only: True},
+     products: [ "123-ABC-723"]
+  }
 ```
 
 Here's a piece of Python code to perform the compound query:
 
 ```python
 def create_hashed_lookups(lookup_key, products):
-h = hashlib.new("ripemd160") h.update(str(lookup_key))
-client.put(("test", "lookups", h.hexdigest()),
-{ 'products': products})
+  h = hashlib.new("ripemd160")
+  h.update(str(lookup_key))
+  client.put(("test", "lookups", h.hexdigest()), 
+             { 'products': products})
+
 def match_hashed(lookup_key):
-m = []
-h = hashlib.new("ripemd160")
-h.update(str(lookup_key))
-(key, meta, found) = client.get(("test", "lookups", h.hexdigest())) for sku in found['products']:
-(key, meta, record) = client.get(("test", "products", sku))
-m.append(record) return m
-# Find matches based on hashed criteria lookup_key={'pickup_only': True, 'pre_assembled': True} create_hashed_lookups(lookup_key, ["123-ABC-723"])
+  m = []
+  h = hashlib.new("ripemd160")
+  h.update(str(lookup_key))
+  (key, meta, found) = client.get(("test", "lookups", h.hexdigest()))
+  for sku in found['products']:
+    (key, meta, record) = client.get(("test", "products", sku))
+    m.append(record)
+  return m
+
+# Find matches based on hashed criteria
+lookup_key={'pickup_only': True, 'pre_assembled': True}
+create_hashed_lookups(lookup_key, ["123-ABC-723"])
 # Find the match
 matches = match_hashed(lookup_key)
 for m in matches:
-print m
+  print m
+
 ```
 
 The function ```create_hased_lookups``` is creating a hash (using RIPEMD­160) of the compound values we want to query for, thus providing a compact and reproducible value to query against. We want to deterministic hash that minimizes collision, RIPEMD­160 is used in the Bitcoin algorithm, but we could have used SHA512 or any other popular hash. We could have used a simple concatenation of strings, but a hash avoids the problem of key size and key distribution. This allows a Primary Key lookup to be made on these compound values. Once the ```lookup``` record has been returned, we can they execute the subsequent Primary Key lookups of the ```product``` data as we have done previously.
@@ -126,7 +163,14 @@ The function ```create_hased_lookups``` is creating a hash (using RIPEMD­160) o
 Running the code, you will see the matching product printed:
 
 ```json
-{'sku': '123-ABC-723', 'category': ['Garden', 'Tool'], 'name': 'Wheelbarrow', 'pre_assembled': True, 'pickup_only': True, 'weight_in_kg': 12}
+products:
+  { 'sku': '123-ABC-723', 
+    'category': ['Garden', 'Tool'], 
+    'name': 'Wheelbarrow', 
+    'pre_assembled': True, 
+    'pickup_only': True, 
+    'weight_in_kg': 12
+  }
 ```
 
 # Summary
