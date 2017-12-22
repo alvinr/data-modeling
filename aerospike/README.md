@@ -83,6 +83,7 @@ departments:
 employees:
     {ename: "Fred", job_title: "Machinist", dept: "HQ" },
     {ename: "Anne", job_title: "Sales Exec", dept: "HQ" }
+```
 
 This adds some additional processing steps, as the link has to be maintained at both ends ­ for example, when an ```employee``` changes ```department```. We will deal with this issue in a separate blog post.
 
