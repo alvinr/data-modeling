@@ -125,8 +125,8 @@ In this article, we covered the basic concepts of:
 Other atricles in this series will cover
 ### TODO - add links
 * [Faceted Query](faceting/README.md)
-* State Machines & Queue
-* Inventory Control
-* Bucketing
-* Credit / Debit
-* Reparenting, bi­directional associations
+* [State Machines & Queue](/state_machines/README.md)
+* [Inventory Control](/inventory/README.md)
+* [Bucketing](/activity_stream/README.md)
+* [Credit / Debit](/credit_debit/README.md)
+* [Reparenting, bi­directional associations](/reparenting/README.md)
