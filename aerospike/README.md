@@ -26,7 +26,7 @@ Distributed databases like Aerospike has been designed to scale horizontally, ma
 ## Encapsulation and Embedding
 The Aerospike record defines the transactional boundary. But unlike an RDBMS record, an Aerospike record can describe a complex object and its relationship.
 
-![alt text](/figure-1.png "Figure­1: Simple containment relationship")
+![alt text](https://github.com/alvinr/data-modeling/blob/master/aerospike/figure-1.png "Figure­-1: Simple containment relationship")
 
 In Figure­-1, entity A entity encapsulates ­ or “owns” ­ all the associated B entities. When A is deleted, all the associated Bs are removed as well. In an RDBMS, you could implement this as two tables and a foreign key, with a delete cascade rule.
 
@@ -45,7 +45,7 @@ This means that instances of entity B are held in an array within the record A. 
 ## Linking
 If we take the same example from Figure­1, and change the names of A to Department and B to Employee, how does this change the way we think about the data? It's reasonable that an Employee works for a specific Department right now, but perhaps last week, they transferred from another Department. We could model this in the following way:
 
-![alt text](https://github.com/alvinr/data-modeling/blob/master/aerospike/figure-2.png "Figure­2: Linking and 'Owning'")
+![alt text](https://github.com/alvinr/data-modeling/blob/master/aerospike/figure-2.png "Figure­-2: Linking and 'Owning'")
 
 What this is saying is that each ```department``` has a number of ```assignments```, and each ```assignment``` is for a specific ```employee```. That assignment has a ```start_date``` so you can see the current (i.e., the most recent) and historical assignments. Bear in mind that there are many alternative models, but let’s concentrate on the generic patterns!
 Using JSON again, here's one way that could be modeled:
