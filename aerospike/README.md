@@ -6,15 +6,15 @@ Aerospike is a Key­Value store ­ so how you think about, model, and access you
 ## Key­Value Data Models
 At some level, a key­value data model is simple. With a Primary Key value, you can look up the data associated with that key. In Aerospike, a record can be made up of:
 * Scalar data types
-** Integers
-** Strings
-** Bytes
-** Doubles
+ * Integers
+ * Strings
+ * Bytes
+ * Doubles
 * Complex data Types
-** Lists
-** Maps
-** Sorted Maps
-** GeoJSON
+ * Lists
+ * Maps
+ * Sorted Maps
+ * GeoJSON
 
 This allows a record to contain structure, as it's neither a binary blob nor solely made up of scalar values like some other key­value stores.
 
