@@ -27,6 +27,7 @@ Distributed databases like Aerospike has been designed to scale horizontally, ma
 The Aerospike record defines the transactional boundary. But unlike an RDBMS record, an Aerospike record can describe a complex object and its relationship.
 
 ![Alt text](figure-1.png "Figure­-1: Simple containment relationship")
+
 Figure­-1: Simple containment relationship
 
 In Figure­-1, entity A entity encapsulates ­ or “owns” ­ all the associated B entities. When A is deleted, all the associated Bs are removed as well. In an RDBMS, you could implement this as two tables and a foreign key, with a delete cascade rule.
@@ -41,15 +42,16 @@ A:
   }
 ```
 
-This means that instances of entity B are held in an array within the record A. Thus, removing record A implicitly removes the A record and all the encapsulated B records. Any operation that modifies record A ­ for example to set the attribute a1to "foobar" or to add or remove an element in the Barray ­ is still a single record operation, and thus, atomic.
+This means that instances of entity B are held in an array within the record A. Thus, removing record A implicitly removes the A record and all the encapsulated B records. Any operation that modifies record ```A```­ for example to set the attribute ```a1``` to "foobar" or to add or remove an element in the ```B``` array ­is still a single record operation, and thus, atomic.
 
 ## Linking
-If we take the same example from Figure­1, and change the names of A to Department and B to Employee, how does this change the way we think about the data? It's reasonable that an Employee works for a specific Department right now, but perhaps last week, they transferred from another Department. We could model this in the following way:
+If we take the same example from Figure­-1, and change the names of ```A``` to ```Department``` and ```B``` to ```Employee```, how does this change the way we think about the data? It's reasonable that an ```Employee``` works for a specific ```Department``` right now, but perhaps last week, they transferred from another ```Department```. We could model this in the following way:
 
 ![Alt text](figure-2.png?raw=true "Figure­-2: Linking and 'Owning'")
+
 Figure­-2: Linking and 'Owning'
 
-What this is saying is that each ```department``` has a number of ```assignments```, and each ```assignment``` is for a specific ```employee```. That assignment has a ```start_date``` so you can see the current (i.e., the most recent) and historical assignments. Bear in mind that there are many alternative models, but let’s concentrate on the generic patterns!
+What this is saying is that each ```department``` has a number of ```assignments```, and each ```assignment``` is for a specific ```employee```. That ```assignment``` has a ```start_date``` so you can see the current (i.e., the most recent) and historical assignments. Bear in mind that there are many alternative models, but let’s concentrate on the generic patterns!
 Using JSON again, here's one way that could be modeled:
 
 ```
@@ -65,14 +67,14 @@ employees:
   {ename: "Anne", job_title: "Sales Exec"}
 ```
 
-In this model, ```assignments``` have been encapsulated within the ```department```. Assuming enameis the Primary Key for the ```employees``` (please take this with a pinch of salt), you can use this information to make a second query on the ```employees``` to find any other details; for example, their ```job_title````. Aerospike, like many NoSQL databases, does not perform traditional joins like an RDBMS. Again, this is because the whole operation could mean coordinating many nodes to satisfy the query ­ which kills the overall latency of the operation.
+In this model, ```assignments``` have been encapsulated within the ```department```. Assuming ```ename``` is the Primary Key for the ```employees``` (please take this with a pinch of salt), you can use this information to make a second query on the ```employees``` to find any other details; for example, their ```job_title````. Aerospike, like many NoSQL databases, does not perform traditional joins like an RDBMS. Again, this is because the whole operation could mean coordinating many nodes to satisfy the query ­- which kills the overall latency of the operation.
 
 Aerospike works on the basis that you can break down the operations into discrete steps. In our example, we can thus now perform two primary key accesses to obtain all the information required. But since these are now discrete operations, eventual consistent does come into play, since an interleaved reads will see changed data.
 
-Any operation on departmentnow encapsulates the assignment; hence changes to either are atomic within a single operation, just as in the last example.
+Any operation on ```department``` now encapsulates the ```assignment```; hence changes to either are atomic within a single operation, just as in the last example.
 
 ## Bi-­Directionality
-We also need to consider that some relationship are directed in a single direction. Right now, we can find the ```employee``` within the department, but there is no simple way to find,for a given ```employee```,which ```department``` they work for. Our current model means that you have to look at each ```department``` and check if the ```employee``` has an active assignment. For this relationship, we need to store links at both ends, as the following JSON describes:
+We also need to consider that some relationship are directed in a single direction. Right now, we can find the ```employee``` within the department, but there is no simple way to find,for a given ```employee```,which ```department``` they work for. Our current model means that you have to look at each ```department``` and check if the ```employee``` has an active ```assignment```. For this relationship, we need to store links at both ends, as the following JSON describes:
 
 ```
 departments:
@@ -87,10 +89,10 @@ employees:
     {ename: "Anne", job_title: "Sales Exec", dept: "HQ" }
 ```
 
-This adds some additional processing steps, as the link has to be maintained at both ends ­ for example, when an ```employee``` changes ```department```. We will deal with this issue in a separate blog post.
+This adds some additional processing steps, as the link has to be maintained at both ends ­- for example, when an ```employee``` changes ```department```. We will deal with this issue in a separate blog post.
 
 ## Denormalization
-Carrying on from the last example, it now means that you have to execute two Primary Key lookups in order to obtain an attribute for the employee (e.g., ```job_title```) ­ perhaps you have a summary screen to show all the active ```employees``` for a ```department```. If this is a frequent request, can we optimize this and avoid two lookups? The short answer is yes, through the process of denormalization. Remember that the process of normalization removes any repeated data, so it will come as no surprise that denormalization reintroduces that repeated data! The following JSON schema shows the denormalized ```job_title``` on the assignment.
+Carrying on from the last example, it now means that you have to execute two Primary Key lookups in order to obtain an attribute for the employee (e.g., ```job_title```) ­ perhaps you have a summary screen to show all the active ```employees``` for a ```department```. If this is a frequent request, can we optimize this and avoid two lookups? The short answer is yes, through the process of denormalization. Remember that the process of normalization removes any repeated data, so it will come as no surprise that denormalization reintroduces that repeated data! The following JSON schema shows the denormalized ```job_title``` on the ```assignment```.
 
 ```
 departments:
@@ -107,7 +109,7 @@ employees:
     {ename: "Anne", title: "Sales Exec", dept: "HQ" }
 ```
 
-As you can see, we have now added or denormalized more that just the Primary Key of the employee into the assignment. All the data required has been denormalized into this object, this removes the need for a second query. But this does not come for free. There is extra storage required, because we are now storing the same data (e.g. ```job_title```) multiple times. If "Anne" now get spromoted to a "VP of Sales" , then we potentially have to make multiple updates: once to the ```employee`` record, and once to the ```epartment``` record that encapsulates the assignment.
+As you can see, we have now added or denormalized more that just the Primary Key of the ```employee``` into the ```assignment```. All the data required has been denormalized into this object, this removes the need for a second query. But this does not come for free. There is extra storage required, because we are now storing the same data (e.g. ```job_title```) multiple times. If "Anne" now get spromoted to a "VP of Sales" , then we potentially have to make multiple updates: once to the ```employee`` record, and once to the ```department``` record that encapsulates the ```assignment```.
 
 For this use case, you can argue that perhaps you don't need to update the ```assignment```; you simply insert a new ```assignment``` into the array with the new ```job_tile``` and ```start_date```. You would probably need to update the ```employee``` record with the new ```job_title```, or simply remove the ```job_title``` from ``employee``` because the current ```title``` is on the ```assignment```.
 
@@ -122,7 +124,7 @@ In this article, we covered the basic concepts of:
 
 Other atricles in this series will cover
 ### TODO - add links
-* Faceted Query
+* [Faceted Query](faceting/README.md)
 * State Machines & Queue
 * Inventory Control
 * Bucketing
