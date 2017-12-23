@@ -26,7 +26,9 @@ Distributed databases like Aerospike has been designed to scale horizontally, ma
 ## Encapsulation and Embedding
 The Aerospike record defines the transactional boundary. But unlike an RDBMS record, an Aerospike record can describe a complex object and its relationship.
 
-![alt text](/figure-1.png?raw=true "Figure­-1: Simple containment relationship")
+![alt text](figure-1.png "Figure­-1: Simple containment relationship")
+
+https://github.com/alvinr/data-modeling/blob/master/aerospike/figure-2.png
 
 In Figure­-1, entity A entity encapsulates ­ or “owns” ­ all the associated B entities. When A is deleted, all the associated Bs are removed as well. In an RDBMS, you could implement this as two tables and a foreign key, with a delete cascade rule.
 
