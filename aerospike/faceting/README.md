@@ -13,10 +13,10 @@ products:
 
 Let's assume that SKU (Stock Keeping Unit) is the Primary Key. If we know the Primary Key, then we get a direct lookup in order to get the record. But how many of us remember the SKU of any product we want to buy? You are likely to want to find the product through some other criteria, like its name, or whether it's in a particular product category.
 
-# The RDBMS Solution
+## The RDBMS Solution
 In an RDBMS, you may be tempted to create secondary indexes on any attribute you may want to query on ­ for example, name, weight_in_kgetc. Creating multiple indexes means that as the record is inserted, multiple indexes have to be changed; updates to those indexed values will also require index updates. A list like category would need to be implemented as an intersection table between the unique Categories and the usage by the Product. Then you’ll certainly end up with multiple tables, joins and potential index merges to effectively query on multiple criteria. As the index structures are maintained, this can impact the concurrency, latencies, and throughput of the overall system. When you then distribute this data across many machines ­ for example, using Partitioning ­ you’ll need to scatter the query across each of these nodes and gather all the results together. Again, this can impact the latency of the results back to the client.
 
-# Faceting
+## Faceting
 Faceting is just simply turning each of these possible secondary index queries into a multiple primary key lookups. So let's look at a possible JSON schema:
 
 ```
@@ -36,7 +36,7 @@ So if we are looking for a product in the category of "Tool", we can perform a P
 Thus, we can now avoid performing a scatter & gather across a distributed system and turn this into a series of Primary Key lookups, each of which can be parallelized. This dramatically improves the throughput, latency, and concurrency of the system. It also has the nice side effect that it will be fastest way to return the first record ­ whichever server returns responds the fastest, the record can be delivered for processing by the application.
 The final benefit of this pattern is that you no longer need to build and maintain indexes on each of the attributes. Building a new lookup simply requires creating and inserting a new lookup record. When the attributes of the productchange, then there is a secondary process to manage the associated lookup records, so this is not for free. The balance is between the need for speedy and flexible lookups versus the cost of maintenance. If the values are slowly changing or immutable, then it may be a good trade off.
 
-# Multiple Attribute Faceting
+## Multiple Attribute Faceting
 But what about filtering on multiple attributes? This is a typical query, so taking our example again, what if we wanted to find products where ```pickup_only`` and ```pre_assembled``` are both True?
 
 There are a couple of ways to achieve this. We could could perform two queries, and then find the intersection. Here's an example of doing that in Python:
@@ -94,7 +94,7 @@ def match(key1, key2):
     m.append(record)
   return m
 
-# Find matches based on two criteria
+## Find matches based on two criteria
 create_products()
 create_lookups()
 # Find the match
@@ -119,7 +119,7 @@ products:
 
 While this adds a lot of complexity, as you need to calculate the intersection of the results of each query, it’s still a reasonable, scalable solution. But how can we remove the need to find the intersection in the client code, especially if each of those lists starts to get really big?
 
-# Compounding and Hashing Attribute Keys
+## Compounding and Hashing Attribute Keys
 In effect, what we are doing is creating a compound key. This is something that you could build in a RDBMS ­ along with the previously discussed overhead. The pattern is similar with Aerospike; in essence, we build a compound key from the attribute we want to query, but we use this to create a Primary Key for the object we want to lookup. Here's a sample of what that data in JSON form:
 
 ```json
@@ -173,6 +173,6 @@ products:
   }
 ```
 
-# Summary
+## Summary
 As can be seen, faceting is a powerful pattern that enables complex query patterns to executed in an efficient way with a key­value store. With any denormalization, there is always the cost of propagating the changes to the denormalized data. The tradeoff is always the frequency of changes versus the query flexibility that your application needs.
 In the next blog post, we will discuss how to deal with structures like queues and state machines.
