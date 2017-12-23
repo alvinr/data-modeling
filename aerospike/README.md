@@ -28,7 +28,7 @@ The Aerospike record defines the transactional boundary. But unlike an RDBMS rec
 
 ![Alt text](figure-1.png "Figure­-1: Simple containment relationship")
 
-Figure­-1: Simple containment relationship
+**Figure­-1: Simple containment relationship**
 
 In Figure­-1, entity A entity encapsulates ­ or “owns” ­ all the associated B entities. When A is deleted, all the associated Bs are removed as well. In an RDBMS, you could implement this as two tables and a foreign key, with a delete cascade rule.
 
@@ -49,7 +49,7 @@ If we take the same example from Figure­-1, and change the names of ```A``` to 
 
 ![Alt text](figure-2.png?raw=true "Figure­-2: Linking and 'Owning'")
 
-Figure­-2: Linking and 'Owning'
+**Figure­-2: Linking and 'Owning'**
 
 What this is saying is that each ```department``` has a number of ```assignments```, and each ```assignment``` is for a specific ```employee```. That ```assignment``` has a ```start_date``` so you can see the current (i.e., the most recent) and historical assignments. Bear in mind that there are many alternative models, but let’s concentrate on the generic patterns!
 Using JSON again, here's one way that could be modeled:
