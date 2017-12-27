@@ -9,7 +9,7 @@ available pool
 
 ## Simple Purchase
 
-Lets model the eventsand the users. Here's an example in JSON:
+Lets model the ```events``` and the ```users```. Here's an example in JSON:
 
 ```
 events:
@@ -23,7 +23,7 @@ users:
   }
 ```
 
-So when we come to purchase 5 tickets for this event, it will require two updates: one to decrement the available quantity on the eventrecord, and a second update to insert into the purchasedarray on the userrecord. In Python, this would look like:
+So when we come to purchase 5 tickets for this event, it will require two updates: one to decrement the available quantity on the ```event``` record, and a second update to insert into the ```purchased``` array on the ```user``` record. In Python, this would look like:
 
 ```python
 import aerospike
@@ -67,8 +67,7 @@ print record
 print record
 ```
 
-As you can see, the ```simple_purchase``` function deducts the quantity requested from the eventand adds a list entry to the ```purchased`` on the ```users``` record.
-
+As you can see, the ```simple_purchase``` function deducts the quantity requested from the ```event``` and adds a list entry to the ```purchased`` on the ```users``` record.
 
 Running the code, you will see the following output:
 
@@ -87,10 +86,10 @@ Running the code, you will see the following output:
 {'available': 495, 'name': 'Mens 800m Final'}
 ```
 
-This solution does satisfy the requirement to track purchases. However, splitting the two write operations means that tickets can be decremented from the availability on events, but never added to the purchasedon users­ e.g., if the code crashes between the two statements. That would leave with unsold inventory ­ not a good thing!
+This solution does satisfy the requirement to track purchases. However, splitting the two write operations means that tickets can be decremented from the availability on events, but never added to the ```purchased``` on ```users```­ e.g., if the code crashes between the two statements. That would leave with unsold inventory ­- not a good thing!
 
 ## Storing the Purchases Within the Event
-We can change the transactional boundary by using the technique of embedding, as shown in an earlier blog post. We can combine the quantity of tickets available along with who the tickets were sold to:
+We can change the transactional boundary by using the technique of embedding, as shown in an [arlier article](../README.md)e. We can combine the quantity of tickets available along with who the tickets were sold to:
 
 ```
 events:
@@ -100,7 +99,7 @@ events:
   }
 ```
 
-We can make use of the Aerospike operatecommand, which allows multiple sub­operations to be combined into a single atomic operation to manipulate the structure:
+We can make use of the Aerospike ```operate``` command, which allows multiple sub­operations to be combined into a single atomic operation to manipulate the structure:
 
 ```python
 def purchase(user, event, qty):
@@ -135,7 +134,7 @@ purchase(requestor, for_event, 500)
 print record
 ```
 
-The purchase function reduces the availabletickets and adds the sale onto the sold_tolist. Running the code, you will see the following output:
+The ```purchase``` function reduces the ```available``` tickets and adds the sale onto the ```sold_to``` list. Running the code, you will see the following output:
 
 ```
 >>> # Purchase valid number of tickets ... for_event = "Mens 100m Final"
@@ -155,7 +154,7 @@ The purchase function reduces the availabletickets and adds the sale onto the so
 {'available': -5, 'sold_to': [{'who': 'Fred', 'qty': 5}, {'who': 'Fred', 'qty': 500}], 'name': 'Mens 100m Final'}
 ```
 
-So by changing the transaction boundary by embedding the sold_towithin the eventrecord, we can now atomically change the quantity and add the purchases in one statement. However, over­selling of tickets is possible, as the current availability is not checked before the requested quantity is decremented.
+So by changing the transaction boundary by embedding the ```sold_to``` within the ```event``` record, we can now atomically change the quantity and add the purchases in one statement. However, over­selling of tickets is possible, as the current availability is not checked before the requested quantity is decremented.
 
 
 ## Checking if Tickets are Available
@@ -163,7 +162,7 @@ Thus, we need to check that there is availability before the available stock is 
 
 ```python
 def check_availability_and_purchase(user, event, qty):
-  (key, meta, record) = client.get(("test","events",for_event))
+  (key, meta, record) = client.get(("test","events", for_event))
   if record['available'] >= qty:
     operations = [
       {
@@ -184,7 +183,7 @@ def check_availability_and_purchase(user, event, qty):
 for_event = "Womens 4x400m Final"
 create_event(for_event, 10)
 check_availability_and_purchase(requestor, for_event, 11)
-(key, meta, record) = client.get(("test","events",for_event))
+(key, meta, record) = client.get(("test","events", for_event))
 print record
 ```
 
@@ -208,10 +207,10 @@ When you run the code, you will see the following output:
 
 First, the ```event``` record is queried, then we programmatically check if there are sufficient tickets available. Just like in the last example, we atomically update the quantity and add to the list of purchased tickets.
 
-As we described in an earlier post, we have added a policy AS_POLICY_GEN_EQ, which ensures that the version number (or in Aerospike­speak, “Generation”) is that same version we read when we come to write the record. If the Generations are not the same, then an exception will be thrown, preventing the potential to overwrite an interleaved write, and thus, avoiding overselling the tickets.
+As we described in an earlier post, we have added a policy ```AS_POLICY_GEN_EQ```, which ensures that the version number (or in Aerospike­ speak, “Generation”) is that same version we read when we come to write the record. If the Generations are not the same, then an exception will be thrown, preventing the potential to overwrite an interleaved write, and thus, avoiding overselling the tickets.
 
 ## Reserve Stock
-Our initial requirements stated that we needed to "hold" or reserve the tickets during the booking process. Just like an airline booking, it would be a poor user experience to get to the end of the payment instructions, just to be told that your tickets have been sold to somebody else. Therefore, we need to include a list of reservationson the events record to keep track of these in­flight transactions:
+Our initial requirements stated that we needed to "hold" or reserve the tickets during the booking process. Just like an airline booking, it would be a poor user experience to get to the end of the payment instructions, just to be told that your tickets have been sold to somebody else. Therefore, we need to include a list of reservationson the events record to keep track of these in­-flight transactions:
 
 ```
 events:
@@ -229,7 +228,7 @@ The reserve function can now do the following:
 
 ```python
 def reserve(user, event, qty):
-  (key, meta, record) = client.get(("test","events",event))
+  (key, meta, record) = client.get(("test", "events", event))
   if record['available'] >= qty:
     # Create the reservation and decrement the stock
     operations = [
@@ -317,7 +316,7 @@ Running the code, you will see the following output:
 The ```reserve``` function contains the main purchase flow. The reservation is made if stock is available, and after a successful credit card authorization (```creditcard_authorization```), the reservation is converted into a sale. In any failure case, the reservation is backed out with the ```backout_reservation``` function.
 
 ## Expiring Reservations
-So we are only left to deal with expiring reservations, the customer does not complete the purchase, code or machines crash etc.. Given that we set a timestamp when the reservation was made, it becomes pretty simple to check if the reservation has expired: remove that element from the reservationslist and add the quantity reserved back to the total available for the event.
+So we are only left to deal with expiring reservations, the customer does not complete the purchase, code or machines crash etc.. Given that we set a timestamp when the reservation was made, it becomes pretty simple to check if the reservation has expired: remove that element from the ```reservations``` list and add the quantity reserved back to the total available for the event.
 
 ```python
 def create_expired_reservation(event):
@@ -384,7 +383,7 @@ events:
 ```
 
 During the purchase flow, we remove the reservation entry and add the details into the ```sold_to```. We could scan the ```sold_to``` and then check if any user has a missing purchase. Alternatively, as we remove the item out of reservations and into ```sold_to``` ,we can also add to
-the list pending. We can now use the pendinglist to update each useras an out of band process. The changes to the reservation process are shown below in bold:
+the list pending. We can now use the ```pending``` list to update each useras an out of band process. The changes to the reservation process are shown below:
 
 ```python
 def reserve_with_pending(user, event, qty):
@@ -433,7 +432,7 @@ def reserve_with_pending(user, event, qty):
       backout_reservation(key, meta, user, qty)
 ```
 
-Now we can have a sweeper process that adds the purchase to the userspurchaseslist and then pops the items from the pendinglist. We do it in that order in case there is a crash or other change between these two operations. We can re­run this change multiple items, its idempotent.
+Now we can have a sweeper process that adds the purchase to the users ```purchases``` list and then pops the items from the ```pending``` list. We do it in that order in case there is a crash or other change between these two operations. We can re­run this change multiple items, its idempotent.
 
 ```python
 def post_purchases(event):
@@ -489,6 +488,6 @@ When you run the code, you will see the following output:
 The ```post_purchases``` function adds a map entry onto the ```users``` purchases. The map is keyed by the ```order_id```, so that if this method is executed again, the order is listed once and only once. After the ```user``` record is updated, then we can pop the order from the ```pending``` list on the ```event```.
 
 ## Summary
-As we have seen, dealing with multi­step transactions is simple. Careful consideration needs to be made around transaction boundaries ­ remember that every record write is atomic, but that there are no multi­statement transaction guarantees. This means you need to approach your domain problem with this in mind, ensuring that multi­step transaction are replayable or you have adequate ways to compensate on failure.
+As we have seen, dealing with multi­step transactions is simple. Careful consideration needs to be made around transaction boundaries ­- remember that every record write is atomic, but that there are no multi­statement transaction guarantees. This means you need to approach your domain problem with this in mind, ensuring that multi­step transaction are replayable or you have adequate ways to compensate on failure.
 
-In the next blog post, we will talk about the bucketing pattern, and how to deal with an activity stream like a Slack or Twitter feed.
+In the next article, we will talk about the [bucketing pattern](../activity_stream/README.md), and how to deal with an activity stream like a Slack or Twitter feed.

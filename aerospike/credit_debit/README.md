@@ -1,5 +1,5 @@
 # Debit / Credit Transactions
-Debit and Credit transactions are often used in textbooks and teaching materials as examples of why you need multi­statement transactions in an RDBMS. Let's start with a simple JSON schema:
+Debit and Credit transactions are often used in textbooks and teaching materials as examples of why you need multi­-statement transactions in an RDBMS. Let's start with a simple JSON schema:
 
 ```
 accounts:
@@ -12,7 +12,10 @@ In order to transfer $50 from Jane to Bob, we need to modify both of these recor
 ## State Machines
 The reality is that there is a workflow or a state machine to track a complex transaction like a debit & credit. Let’s look at a simplified version:
 
-##TODO ADD STATE MACHINE DIAGRAM
+
+![Alt text](figure-1.png "Figure­-1: Simplified state machine for credit / debit transaction")
+
+**Figure­-1: Simplified state machine for credit / debit transaction**
 
 The following are critical as we transition through the state machine:
 * Operations are atomic
@@ -35,18 +38,18 @@ txs:
   }
 ```
 
-Each record stored the ```to``` and ```from``` account, along with the amountand timestamp (```ts```). We will also extend the accountsschema to include the transactions that have been processed, keyed by the transaction ID (in this example, "VXW1DG"). We will see how we use this structure later.
+Each record stored the ```to``` and ```from``` account, along with the amountand timestamp (```ts```). We will also extend the ```accounts``` schema to include the transactions that have been processed, keyed by the transaction ID (in this example, "VXW1DG"). We will see how we use this structure later.
 
 ```
 accounts:
   { name: "Bob",
     balance: 75,
-    txs: { {"VXW1DG": {"amt":50, "from":"Jane"} }
+    txs: { { "VXW1DG": {"amt":50, "from":"Jane"} }
   }
   {
     name: "Jane",
     balance: 450,
-    txs: { {"VXW1DG": {"amt":50, "to":"Bob"} }
+    txs: { { "VXW1DG": {"amt":50, "to":"Bob"} }
   }
 ```
 
@@ -70,10 +73,10 @@ mpolicy_create = {'map_write_mode': aerospike.MAP_CREATE_ONLY}
 client = aerospike.client(config).connect()
 
 def create_account(user, opening_balance):
-  client.put(("test", "accounts", user), {'balance':opening_balance})
+  client.put(("test", "accounts", user), {'balance': opening_balance})
 
 def simple_debit_credit(from_account, to_account, amount):
-  (key, meta, record) = client.get(("test", "accounts",from_account))
+  (key, meta, record) = client.get(("test", "accounts", from_account))
   if record['balance'] >= amount:
     client.increment(("test", "accounts", from_account), "balance", amount * -1, meta, wpolicy)
     client.increment(("test", "accounts", to_account), "balance", amount)
@@ -114,7 +117,7 @@ def check_valid_transition(tx_id, expected_state, got_state):
 
 ## Process Credit & Debit
 
-Implementing the state diagram from Figure­1, the basic flow needs to check for available funds and then process the credit and debit, as can be seen in the following Python code:
+Implementing the state diagram from Figure­-1, the basic flow needs to check for available funds and then process the credit and debit, as can be seen in the following Python code:
 
 ```python
 def process_debit_credit(tx_id):  
@@ -142,9 +145,9 @@ def process_insufficient_funds(tx_id):
   print("{0}: Insufficient funds account:'{1}' amount:{2}".format(tx_id, record['from'], record['amt']))
 ```
 
-The main processing routine is ```process_debit_credit```, which checks if there is an available balance to support the transaction, and then performs the debit and credit. The ```check_funding``` function performs the balance check and then transitions the state machine. Finally we have the function process_insufficient_fundsto deal with the transition of the state machine if funds were not available.
+The main processing routine is ```process_debit_credit```, which checks if there is an available balance to support the transaction, and then performs the debit and credit. The ```check_funding``` function performs the balance check and then transitions the state machine. Finally we have the function ```process_insufficient_funds``` to deal with the transition of the state machine if funds were not available.
 
-## Process Deb
+## Process Debit
 Both the Debit and Credit have the same processing needs: the transaction needs to apply once, and only once. We do this by maintaining a transaction list on the account, which we can check if the transaction exists before debiting the account. We can achieve this by combining both operators into a single atomic operation:
 
 ```python
@@ -181,19 +184,19 @@ def process_debit(tx_id, from_account, to_account, amount):
       print("{0}: Debited from:'{1}', amount:{2}, balance:{3}".format(tx_id, from_account, amount, record['balance']))
 ```
 
-This function needs to process the Approvedtransaction, but since the approval occurred,
+This function needs to process the ```Approved``` transaction, but since the approval occurred,
 there may have been another transaction processed that affects the available balance, so we need to check for available funds again. If funding is still available, then we:
 * Add into the ```txs``` Map the amountand from, keyed by the transaction ID. 
 * Decrement the available balance
 * Check that we are writing the record we read
 
-If the key is already present in the map, then all of these operations will not be applied. This is achieved through the map_policyelement listed as the last element of the OP_MAP_PUT operation, and defined thus:
+If the key is already present in the map, then all of these operations will not be applied. This is achieved through the ```map_policy``` element listed as the last element of the OP_MAP_PUT operation, and defined thus:
 
 ```
 mpolicy_create = {'map_write_mode': aerospike.MAP_CREATE_ONLY}
 ```
 
-As we have seen previously, we use the write policy (```wpolicy```) to ensure that the Generation of the record is the same as we read ­ if it's not, then the write operation will fail. This protects from another process or thread applying another transaction between the time this thread reads, and the time it writes, the record.
+As we have seen previously, we use the write policy (```wpolicy```) to ensure that the Generation of the record is the same as we read ­- if it's not, then the write operation will fail. This protects from another process or thread applying another transaction between the time this thread reads, and the time it writes, the record.
 
 ```
 wpolicy = {'gen': aerospike.POLICY_GEN_EQ}
@@ -275,8 +278,8 @@ IRFIB7: Debited from:'Son', amount:10, balance:190 IRFIB7: Credited to:'Daughter
 1N7PLF: Insufficient funds account:'Daughter' amount:11
 ```
 
-As we have already seen, the size of a record has a finite capacity. In the Activity Stream blog, we talked about how to bucket, or slice, large lists. If we wanted to retain the entire history of the transactions, we would need to consider something similar here. However, if this information is simply being used to process the state machine, then before we transition to the terminal state (in this case "Credited"), we could remove this Map element to complete the process. The choice is yours!
+As we have already seen, the size of a record has a finite capacity. In the Activity Stream article, we talked about how to bucket, or slice, large lists. If we wanted to retain the entire history of the transactions, we would need to consider something similar here. However, if this information is simply being used to process the state machine, then before we transition to the terminal state (in this case "Credited"), we could remove this Map element to complete the process. The choice is yours!
 
 ## Summary
 Multi­statement transaction often encapsulate complex workflows or state machines. Often, if you take a step back, you may be able to see these patterns and leverage Aerospike's ability to process complex operations on a single record. This can enable sophisticated processing, like a debit/credit transaction to operate correctly.
-In the next blog post, we will talk about how to re­parent and deal with bi­directional relationships.
+In the next article, we will talk about how to re­parent and deal with [bi­-directional relationships](../reparenting/README.md).

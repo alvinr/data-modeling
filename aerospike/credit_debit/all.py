@@ -13,10 +13,10 @@ mpolicy_create = {'map_write_mode': aerospike.MAP_CREATE_ONLY}
 client = aerospike.client(config).connect()
 
 def create_account(user, opening_balance):
-  client.put(("test", "accounts", user), {'balance':opening_balance})
+  client.put(("test", "accounts", user), {'balance': opening_balance})
 
 def simple_debit_credit(from_account, to_account, amount):
-  (key, meta, record) = client.get(("test", "accounts",from_account))
+  (key, meta, record) = client.get(("test", "accounts", from_account))
   if record['balance'] >= amount:
     client.increment(("test", "accounts", from_account), "balance", amount * -1, meta, wpolicy)
     client.increment(("test", "accounts", to_account), "balance", amount)

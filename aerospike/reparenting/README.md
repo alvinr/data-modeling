@@ -1,9 +1,9 @@
-# Re­Parenting, Bi­Directional and Many­-To-­Many Associations
+# Re­-Parenting, Bi­-Directional and Many­-To-­Many Associations
 
-As we discussed in the first article, encapsulation provides a simple mechanism for storage of a directed relationship. But we also saw that bi­directional associations are very common ­ especially coming from an RDBMS and the use of intersection tables ­ whether they are needed or not. So the problem is how to deal with the bi­directionality in a key­value store.
+As we discussed in the [first article](../README.md), encapsulation provides a simple mechanism for storage of a directed relationship. But we also saw that bi­-directional associations are very common, ­especially coming from an RDBMS and the use of intersection tables, ­whether they are needed or not. So the problem is how to deal with the bi­-directionality in a key­-value store.
 
 ## Parts Management
-Let's assume we have a system to track ```parts``` and their ```location```. For example, we have parts available at both our "Warehouse" and "Store" locations. To transfer a part between locations, we need to keep track of the partsavailable at the location, and where any given part is currently located. In JSON, the schema could look like this:
+Let's assume we have a system to track ```parts``` and their ```location```. For example, we have parts available at both our "Warehouse" and "Store" locations. To transfer a part between locations, we need to keep track of the ```parts``` available at the location, and where any given part is currently located. In JSON, the schema could look like this:
 
 ```
 locations:
@@ -16,14 +16,14 @@ parts:
 ```
 
 So to move a part between locations, we need to effectively manage the links on both ends of the relationship, as follows:
-* Modify the locationon the partsrecord to "Mountain View"
-* Add the partinto the list of partsfor the "Mountain View" location
-* Remove the partfrom the partslist of the "Las Vegas" location
+* Modify the ```location`` on the ```parts``` record to "Mountain View"
+* Add the ```part``` into the list of ```parts``` for the "Mountain View" location
+* Remove the ```part``` from the ```parts``` list of the "Las Vegas" location
 
-But these are three separate records, and Aerospike does not support multi­statement transaction. How do we do that, then?
+But these are three separate records, and Aerospike does not support multi­-statement transaction. How do we do that, then?
 
 ## Tracking Changes to Relationship Ends
-In effect, updating both ends of the relationship is a state management problem. We need to guarantee that the change is applied to each once at a minimum. We can safely re­apply this multiple times, but we must ensure it happens at least once. Given that we cannot control this via a transaction, we have to accept that these is an eventual consistency problem we may have to deal with. It's possible that after one end if modified,another process or thread reads the value in the other end. We will deal with that in another blog post.
+In effect, updating both ends of the relationship is a state management problem. We need to guarantee that the change is applied to each once at a minimum. We can safely re­apply this multiple times, but we must ensure it happens at least once. Given that we cannot control this via a transaction, we have to accept that these is an eventual consistency problem we may have to deal with. It's possible that after one end if modified, another process or thread reads the value in the other end. We will deal with that in another blog post.
 Looking at the matter in hand, we need to manage how we process the updates to both ends.
 
 ## Basic Setup
@@ -74,7 +74,7 @@ def create_part(part, location):
 You can see that we store the parts available at each location in a Map structure. We will explain why a little later. Since the part can only be at a single location, the the other end of the association can be stored as a scalar value.
 
 ## Transfer Process
-We will track the status of each of the relationship moves with a xferrecord. We can model a very simple state machine (Figure­1), which can be used to manage the changes to an end of a relationship:
+We will track the status of each of the relationship moves with a ```xfer``` record. We can model a very simple state machine (Figure­1), which can be used to manage the changes to an end of a relationship:
 
 ###TODO add diagram
 

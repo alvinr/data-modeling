@@ -72,7 +72,7 @@ print record
 
 # Part Two - Check availability
 def check_availability_and_purchase(user, event, qty):
-  (key, meta, record) = client.get(("test","events",for_event))
+  (key, meta, record) = client.get(("test","events", for_event))
   if record['available'] >= qty:
     operations = [
       {
@@ -103,7 +103,7 @@ print record
 
 # Part Three - Reserve stock
 def reserve(user, event, qty):
-  (key, meta, record) = client.get(("test","events",event))
+  (key, meta, record) = client.get(("test","events", event))
   if record['available'] >= qty:
     # Create the reservation and decrement the stock
     operations = [
@@ -213,7 +213,7 @@ print record
 
 # Part Five - Posting purchases
 def reserve_with_pending(user, event, qty):
-  (key, meta, record) = client.get(("test","events",event))
+  (key, meta, record) = client.get(("test", "events", event))
   if record['available'] >= qty:
     # Create the reservation and decrement the stock
     operations = [
@@ -258,7 +258,7 @@ def reserve_with_pending(user, event, qty):
       backout_reservation(key, meta, user, qty)
 
 def post_purchases(event):
-  (key, meta, record) = client.get(("test","events",event))
+  (key, meta, record) = client.get(("test","events", event))
   for res in record["pending"]:
     # Add to users record
     operations = [

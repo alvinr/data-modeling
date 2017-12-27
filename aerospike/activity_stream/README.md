@@ -1,4 +1,4 @@
-In this blog post, we will talk about a common modelling pattern called bucketing. Aerospike has a maximum record size ­ not an uncommon restriction in a Database. Through embedding, we can model and store large, complex objects. Ultimately, these are restricted by the maximum record size. So how do you deal with that?
+In this article, we will talk about a common modelling pattern called bucketing. Aerospike has a maximum record size ­- not an uncommon restriction in a Database. Through embedding, we can model and store large, complex objects. Ultimately, these are restricted by the maximum record size. So how do you deal with that?
 
 ## Activity Streams
 Let’s look at a simple, well­known example: an activity stream. This could be a stream of posts from those you are following on Twitter, or a channel in Slack that you subscribed to. Let's start with a basic JSON schema of how we could model this:
@@ -18,14 +18,14 @@ So how can we achieve a consolidated view, based on one users view of their stre
 * Fan out on write with bucketing
 
 ## Fan Out on Read
-For each message, we record who sent the message, along with the recipients. If we now want to show all the messages the user has sent and received, how do we do that? The answer is that it's complicated. Even if we create a secondary index on the recipients (the tofield), we then have to perform a scatter­gather query; this data design causes inefficiencies and will not scale well.
+For each message, we record who sent the message, along with the recipients. If we now want to show all the messages the user has sent and received, how do we do that? The answer is that it's complicated. Even if we create a secondary index on the recipients (the ```to_field```), we then have to perform a scatter­-gather query; this data design causes inefficiencies and will not scale well.
 
 To summarize this pattern:
 * One record per message sent
 * Multiple recipients stored in an array
 * Recipient list has a Secondary Index
 * Reading a stream for a user requires finding all messages with a matching recipient
-* Requires scatter­gather across a cluster
+* Requires scatter­-gather across a cluster
 
 ## Fan Out on Write
 So how do we avoid the overhead and complexity of obtaining all the messages to display the stream? We can simply model the stream on the user record, and, each time a user posts, add a copy of the message to each of the recipients’ streams. We are simply denormalizing the message to each recipient.
@@ -41,9 +41,9 @@ user:
             ]
   }
 
-To make this example simpler to follow, we will simply add a copy of the message to each recipient. In reality, you may want to store the message text once, then add the primary key of the message to a list of each of the users ­ but that's just an optimization of this basic pattern.
+To make this example simpler to follow, we will simply add a copy of the message to each recipient. In reality, you may want to store the message text once, then add the primary key of the message to a list of each of the users ­- but that's just an optimization of this basic pattern.
 
-Here's some Python code to show how we could cross­post the message to each of the recipients (and the sender), and then print the stream for a given user:
+Here's some Python code to show how we could cross­-post the message to each of the recipients (and the sender), and then print the stream for a given user:
 
 ```python
 import aerospike
@@ -68,7 +68,7 @@ def post_msg_fanout(sent_by, to, msg):
     client.list_insert(("test", "msgs", recipient), "stream", 0, post)
 
 def get_inbox_fanout(user):
-  (key, meta, record) = client.get(("test", "msgs", "Jane"))
+  (key, meta, record) = client.get(("test", "msgs", user))
   return record['stream']
 
 # Send message
@@ -103,9 +103,9 @@ So, to summarize this pattern:
 
 ## Fan Out on Write with Bucketing
 Since we want to avoid record limits, we want to slice or bucket a set of the messages and encapsulate these within a single record. This could be a message count, time period (e.g., day or week), or other criteria that makes sense for the use case. To summarize:
-* Each msgrecord contains an array of messages for the user
+* Each ```msg``` record contains an array of messages for the user
 * Posting a new message is added onto array of messages for each recipient
-* Bucket msgrecord so there’s not too many per record
+* Bucket ```msg``` record so there’s not too many per record
 
 Let's see how we do that with this Python example:
 
@@ -159,9 +159,9 @@ for msg in messages:
 
 Looking at this code, the function ```calc_bucket``` is used to determine the slice that the message will be placed in. This function could decide on any criteria that suits the use case; however, in this case we are slicing by message count and, to make testing easier, using a size limit of 3.
 
-When we reconstruct the complete stream for the user, we want to directly access all the associated buckets ­ and avoid doing a secondary index scan. We do this by creating a compound key of the user and bucket number (see earlier blog post on compound keys). Using a hash function (RIPEMD­160 in this case), we get a consistent key, which we use as the primary key for the bucket. New messages are added to the front of the stream list, by using ```list_insert``` and an index position of zero, i.e., the head of the list.
+When we reconstruct the complete stream for the user, we want to directly access all the associated buckets ­- and avoid doing a secondary index scan. We do this by creating a compound key of the user and bucket number (see earlier article on compound keys). Using a hash function (RIPEMD­160 in this case), we get a consistent key, which we use as the primary key for the bucket. New messages are added to the front of the stream list, by using ```list_insert``` and an index position of zero, i.e., the head of the list.
 
-When the inbox is reassembled in the ```get_inbox_bucketing``` function, we iterate from the most recent bucket backwards, so that the messages list is constructed in reverse chronological order. This is how most user would want to see the information ­ most recent first. In a typical web page, the full history is not presented at first; the user is typically asked to paginate through the stream, so the buckets could be retrieved one by one as needed.
+When the inbox is reassembled in the ```get_inbox_bucketing``` function, we iterate from the most recent bucket backwards, so that the messages list is constructed in reverse chronological order. This is how most user would want to see the information ­- most recent first. In a typical web page, the full history is not presented at first; the user is typically asked to paginate through the stream, so the buckets could be retrieved one by one as needed.
 
 Running the code, you will see the following output:
 ```
@@ -190,4 +190,4 @@ To summarize this pattern:
 
 ## Summary
 As we can see, the bucketing principle can be applied to many domains and use cases when you need to deal with a long history that will not fit into a single record. Whether you slice by data size, volume, date or some other criteria ­ this pattern can assist in time­series, streams, and many use cases.
-In the next blog post, we will talk about the classic RDBMS problem of a debit/credit transaction.
+In the next article, we will talk about the classic RDBMS problem of a [debit/credit transaction](../credit_debit/README.md).

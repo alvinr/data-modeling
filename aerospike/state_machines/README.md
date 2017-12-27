@@ -2,9 +2,11 @@
 A common data pattern revolves around managing state and ensuring that transitions between states happen in a consistent way. This could be anything from a fulfillment process to workflows or other systems where you need to maintain state.
 
 # Provisioning
-Let's consider a simple provisioning system (see Figure­1); it could be a signup form for a new web site, or automatic provisioning of infrastructure, etc. In this example, let's consider setting up your new Apple TV, Amazon Fire TV or Android TV device, and using one of the applications such as "NBC Sports".
+Let's consider a simple provisioning system (see Figure­-1); it could be a signup form for a new web site, or automatic provisioning of infrastructure, etc. In this example, let's consider setting up your new Apple TV, Amazon Fire TV or Android TV device, and using one of the applications such as "NBC Sports".
 
-###TODO add figure-1
+![Alt text](figure-1.png "Figure­-1: State Machine for managing relationship end transfer")
+
+**Figure­-1: State Machine for managing relationship end transfer**
 
 The first time you use the "NBC Sports" application on the device, you are presented on screen with a Activation code. You then go the provider's web site with the code, enter it and after it performs an entitlement request to your cable provider, the application is activated.
 
@@ -88,7 +90,7 @@ provision(device_id, service2, "")
 print record
 ```
 
-In order to track the activation token used by each application, we create a map structure. This allows a simple keyed access, so we can directly access the entry for "NBCSports", without the need to iterate through a list. As we can see in the provisionfunction, we can directly access the correct item in the map. Per the state diagram in Figure­1, the activation is put in the "Waiting" state, ready for the next steps.
+In order to track the activation token used by each application, we create a map structure. This allows a simple keyed access, so we can directly access the entry for "NBCSports", without the need to iterate through a list. As we can see in the ```provision``` function, we can directly access the correct item in the map. Per the state diagram in Figure­-1, the activation is put in the "Waiting" state, ready for the next steps.
 
 When you run the code, you will see the following:
 
@@ -104,8 +106,8 @@ When you run the code, you will see the following:
 ```
 
 # Avoiding Updates by Other Threads and Processes
-We have added a write policy AS_POLICY_GEN_EQ, which ensures that the version number (or in Aerospike­speak, “Generation”) is that same we read when we come to write the record. This ensures that nobody else has updated the record in the meantime. If the record was changed, then an exception will be thrown when the update is executed. There are several ways we can deal with that (e.g., re­query the record and try the transaction again, return an error to the user,
-compensate on failureetc.), but that is beyond the scope of this article. The key point is that you can track these changes ­ and act on them ­ programmatically.
+We have added a write policy ```AS_POLICY_GEN_EQ```, which ensures that the version number (or in Aerospike­ speak, “Generation”) is that same we read when we come to write the record. This ensures that nobody else has updated the record in the meantime. If the record was changed, then an exception will be thrown when the update is executed. There are several ways we can deal with that (e.g., re­query the record and try the transaction again, return an error to the user,
+compensate on failure etc.), but that is beyond the scope of this article. The key point is that you can track these changes  - and act on them - programmatically.
 
 
 # Tracking Service Activation Attempts
@@ -150,7 +152,7 @@ def do_entitlement(device, service, token):
 
 # Entitlement will move the state, incorrect Token
 do_entitlement(device_id, service1, token)
-(key, meta, record) = client.get(("test","accounts",device_id))
+(key, meta, record) = client.get(("test", "accounts", device_id))
 print record
 ```
 
@@ -159,7 +161,7 @@ The ```do_entitlement``` function transitions to the various states, depending o
 ```
 >>> # Entitlement will move the state, incorrect Token
 ... do_entitlement(device_id, service1, token)
->>> (key, meta, record) = client.get(("test","accounts",device_id))
+>>> (key, meta, record) = client.get(("test", "accounts", device_id))
 >>> print record
 {'tokens': {'NBCSports': {'status': 'Active', 'last_logon_ts': 1470847832, 'token': 'MTOB1J', 'ts': 1470847607, 'failed': 0}, 'ABC': {'status': 'Waiting', 'token': 'HIBKMS', 'ts': 1470847720}}}
 ```
@@ -183,7 +185,7 @@ events:
   }
 ```
 
-In the above example, we are going to use the todolist to track new incoming requests and the entitlementand devicelists to track the separate workflows, so that each process can record its progress.
+In the above example, we are going to use the ```todo``` list to track new incoming requests and the ```entitlement``` and ```device``` lists to track the separate workflows, so that each process can record its progress.
 
 Let's take a look at the code to support this:
 
@@ -288,6 +290,6 @@ Running the code, you will see the following:
 ```
 
 # Summary
-As you can see, building and manipulating data models to support state machines, queues and other structures is straightforward with Aerospike.
+As you can see, building and manipulating data models to support state machines, queues and other structures is straight-forward with Aerospike.
 
 In the next article, we will discuss how to manage a finite (and perishable) resource like tickets sales for the Olympics, and how to deal with reservations that you may need to back out on.

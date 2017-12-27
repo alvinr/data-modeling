@@ -20,7 +20,7 @@ def post_msg_fanout(sent_by, to, msg):
     client.list_insert(("test", "msgs", recipient), "stream", 0, post)
 
 def get_inbox_fanout(user):
-  (key, meta, record) = client.get(("test", "msgs", "Jane"))
+  (key, meta, record) = client.get(("test", "msgs", user))
   return record['stream']
 
 # Send message
