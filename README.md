@@ -13,7 +13,7 @@ The repository contains a number of worked example for data modeling these commo
 
 Assuming you come from an RDBMS background, how do you model these structures in a NoSQL database? This repository covers possible impelmewntations (and limitations) with the following Databases
 
-* Aerospike
+* [Aerospike](aerospike/README.md)
 * Redis (in progress)
 * MongoDB (not started)
 * MariaDB/MySQL (really, not need those as well????)
