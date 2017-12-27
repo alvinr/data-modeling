@@ -129,4 +129,4 @@ Other atricles in this series will cover
 * [Inventory Control](inventory/README.md)
 * [Activity Streams & Bucketing](activity_stream/README.md)
 * [Credit / Debit](credit_debit/README.md)
-* [Reparenting, bi­directional associations](reparenting/README.md)
+* [Reparenting, bi­-directional associations](reparenting/README.md)
