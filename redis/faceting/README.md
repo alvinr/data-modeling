@@ -42,15 +42,15 @@ But what about filtering on multiple attributes? This is a typical query, so tak
 There are a couple of ways to achieve this. We could could perform two queries, and then find the intersection. Here's an example of doing that in Python:
 
 ```python
-import aerospike
+from redis import StrictRedis
 import os
 import hashlib
+import json
 
-config = { 'hosts': [(os.environ.get("AEROSPIKE_HOST", "127.0.01"), 3000)],
-           'policies': { 'key': aerospike.POLICY_KEY_SEND }
-}
-
-client = aerospike.client(config).connect()
+redis = StrictRedis(host=os.environ.get("REDIS_HOST", "localhost"), 
+                    port=os.environ.get("REDIS_PORT", 6379),
+                    db=0)
+redis.flushall()
 
 def create_products():
   wheelbarrow = { 'sku': "123-ABC-723",
@@ -68,59 +68,69 @@ def create_products():
                   'category': ["Tool"]
                 }
   kite =        { 'sku': "320-GHI-921",
-                  'name': "Kite",
-                  'pre_assembled': False,
+                  'name': "Rubik's Cube",
+                  'pre_assembled': True,
                   'pickup_only': False,
-                  'weight_in_kg': 0.5,
+                  'weight_in_kg': 0.25,
                   'category': ["Toy"]
                 }
-  client.put(("test", "products", wheelbarrow['sku']), wheelbarrow)
-  client.put(("test", "products", pump['sku']), pump)
-  client.put(("test", "products", kite['sku']), kite)
+  create_product(wheelbarrow)
+  create_product(pump)
+  create_product(kite)
 
-def create_lookups():
-  client.put(("test", "lookups", "pre_assembled/True"), 
-             { 'products': [ "123-ABC-723", "737-DEF-911"] })
-  client.put(("test", "lookups", "store_pickup_only/True"), 
-             { 'products': [ "123-ABC-723"] })
+def create_product(product):
+  p = redis.pipeline()
+  p.hset("products", product['sku'], json.dumps(product))
+  p.sadd("pre_assembled:" + str(product['pre_assembled']), product['sku'])
+  p.sadd("pickup_only:" + str(product['pickup_only']), product['sku'])
+  p.sadd("weight_in_kg:" + str(product['weight_in_kg']), product['sku'])
+  p.execute()
 
-def match(key1, key2):
+def match(*keys):
   m = []
-  (key1, meta1, record1) = client.get(("test","lookups",key1))
-  (key2, meta2, record2) = client.get(("test","lookups",key2))
-  matches = list(set(record1['products']) & set(record2['products']))
+  matches = redis.sinter(keys)
   for sku in matches:
-    (key, meta, record) = client.get(("test", "products", sku))
+    record = redis.hget("products", sku)
     m.append(record)
   return m
 
-## Find matches based on two criteria
+# Find matches based on two criteria
 create_products()
-create_lookups()
+# create_lookups()
+
 # Find the match
-matches = match("pre_assembled/True", "store_pickup_only/True")
+matches = match("pre_assembled:True", "pickup_only:False")
 for m in matches:
   print m  
 
 ```
 
-We can use the inbuilt list manipulation built into most languages to find the intersection, see code in bold above. Running the code, you will see the following printed:
+We use the ```sinter```[```sinter```](https://redis.io/commands/sinter) function to find the intersection of all the supplied keys, which is a set so can be any number of query criteria. This is a simple and effect way to search for the criteria, running the code you will see the following:
 
 ```
 products:
-  { 'sku': '123-ABC-723', 
-    'category': ['Garden', 'Tool'], 
-    'name': 'Wheelbarrow', 
-    'pre_assembled': True, 
-    'pickup_only': True, 
-    'weight_in_kg': 12
+  { "sku": "737-DEF-911", 
+    "category": ["Tool"], 
+    "name": "Bicycle Pump", 
+    "pre_assembled": true, 
+    "pickup_only": false, 
+    "weight_in_kg": 0.5
+  }
+  { "sku": "320-GHI-921", 
+    "category": ["Toy"], 
+    "name": "Rubik's Cube", 
+    "pre_assembled": true, 
+    "pickup_only": false, 
+    "weight_in_kg": 0.25
   }
 ```
 
-While this adds a lot of complexity, as you need to calculate the intersection of the results of each query, it’s still a reasonable, scalable solution. But how can we remove the need to find the intersection in the client code, especially if each of those lists starts to get really big?
+This is a reasonable solution, ```sinter``` is ```O(N * M)``` in terms of time complexity, where N is cardinaility of the smallest set and M is the number of matching keys.
+
+So how can we reduce the complexity when the faced with larges set or large number fo keys to check?
 
 ## Compounding and Hashing Attribute Keys
-In effect, what we are doing is creating a compound key. This is something that you could build in a RDBMS ­- along with the previously discussed overhead. The pattern is similar with Aerospike; in essence, we build a compound key from the attributes we want to query, but we use this to create a Primary Key for the object we want to lookup. Here's a sample of what that data in JSON form:
+In effect, what we are doing is creating a compound key. This is something that you could build in a RDBMS ­- along with the previously discussed overhead. The pattern is similar with Redis; in essence, we build a compound key from the attributes we want to query, but we use this to create a Primary Key for the object we want to lookup. Here's a sample of what that data in JSON form:
 
 ```json
 lookups:
@@ -135,22 +145,22 @@ Here's a piece of Python code to perform the compound query:
 def create_hashed_lookups(lookup_key, products):
   h = hashlib.new("ripemd160")
   h.update(str(lookup_key))
-  client.put(("test", "lookups", h.hexdigest()), 
-             { 'products': products})
+  for sku in products:
+    redis.sadd("lookups:" + h.hexdigest(), sku)
 
 def match_hashed(lookup_key):
   m = []
   h = hashlib.new("ripemd160")
   h.update(str(lookup_key))
-  (key, meta, found) = client.get(("test", "lookups", h.hexdigest()))
-  for sku in found['products']:
-    (key, meta, record) = client.get(("test", "products", sku))
+  matches = redis.smembers("lookups:" + h.hexdigest())
+  for sku in matches:
+    record = redis.hget("products", sku)
     m.append(record)
   return m
 
 # Find matches based on hashed criteria
 lookup_key={'pickup_only': True, 'pre_assembled': True}
-create_hashed_lookups(lookup_key, ["123-ABC-723"])
+create_hashed_lookups(lookup_key, ["123-ABC-723"] )
 # Find the match
 matches = match_hashed(lookup_key)
 for m in matches:
@@ -158,21 +168,20 @@ for m in matches:
 
 ```
 
-The function ```create_hased_lookups``` is creating a hash (using RIPEMD­160) of the compound values we want to query for, thus providing a compact and reproducible value to query against. We want to deterministic hash that minimizes collision, RIPEMD­160 is used in the Bitcoin algorithm, but we could have used SHA512 or any other popular hash. We could have used a simple concatenation of strings, but a hash avoids the problem of key size and key distribution. This allows a Primary Key lookup to be made on these compound values. Once the ```lookup``` record has been returned, we can they execute the subsequent Primary Key lookups of the ```product``` data as we have done previously.
+The function ```create_hased_lookups``` is creating a hash (using RIPEMD­160 hash) of the compound values we want to query for, thus providing a compact and reproducible value to query against. We want to deterministic hash that minimizes collision, RIPEMD­160 is used in the Bitcoin algorithm, but we could have used SHA512 or any other popular hash. We could have used a simple concatenation of strings, but a hash avoids the problem of key size and key distribution. This allows a Primary Key lookup to be made on these compound values. Once the ```lookup``` record has been returned, we can they execute the subsequent Primary Key lookups of the ```product``` data as we have done previously.
 
 Running the code, you will see the matching product printed:
 
 ```
-products:
-  { 'sku': '123-ABC-723', 
-    'category': ['Garden', 'Tool'], 
-    'name': 'Wheelbarrow', 
-    'pre_assembled': True, 
-    'pickup_only': True, 
-    'weight_in_kg': 12
-  }
+{ "sku": "123-ABC-723", 
+  "category": ["Garden", "Tool"], 
+  "name": "Wheelbarrow", 
+  "pre_assembled": true, 
+  "pickup_only": true, 
+  "weight_in_kg": 12
+}
 ```
 
 ## Summary
-As can be seen, faceting is a powerful pattern that enables complex query patterns to executed in an efficient way with a key­value store. With any denormalization, there is always the cost of propagating the changes to the denormalized data. The tradeoff is always the frequency of changes versus the query flexibility that your application needs.
+As can be seen, faceting is a powerful pattern that enables complex query patterns to executed in an efficient way with a key­-value store. With any denormalization, there is always the cost of propagating the changes to the denormalized data. The tradeoff is always the frequency of changes versus the query flexibility that your application needs.
 In the next article, we will discuss how to model queues and state machines [queues and state machines](../state_machines/README.md).

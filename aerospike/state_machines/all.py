@@ -16,13 +16,6 @@ def create_account(device):
   client.put(("test", "accounts", device),
              {'tokens': {} } )
 
-def create_activation(event, device, service, token):
-  client.put(("test", "events", event),
-             { 'todo': [{'service': service, 'device': device, 'token': token }],
-               'entitlement': [], 
-               'devices': [],
-             })
-
 def generate_token():
   return ''.join(random.choice(string.ascii_uppercase + string.digits) \
     for _ in range(6))
@@ -165,6 +158,13 @@ def process_entitlement(queue):
       (key, meta, record) = client.operate(key, operations, meta, wpolicy)
       do_entitlement(item['device'], item['service'], item['token'])
       client.list_pop(key, "entitlement", i, meta, wpolicy)    
+
+def create_activation(event, device, service, token):
+  client.put(("test", "events", event),
+             { 'todo': [{'service': service, 'device': device, 'token': token }],
+               'entitlement': [], 
+               'devices': [],
+             })
 
 # Create the activation event
 create_activation("new device", device_id, "NBCSports", token)

@@ -76,7 +76,10 @@ You can see that we store the parts available at each location in a Map structur
 ## Transfer Process
 We will track the status of each of the relationship moves with a ```xfer``` record. We can model a very simple state machine (Figure­1), which can be used to manage the changes to an end of a relationship:
 
-###TODO add diagram
+![Alt text](figure-1.png "Figure­-1: State Machine for managing relationship end transfer")
+
+**Figure­-1: State Machine for managing relationship end transfer**
+
 
 The code to manage the state machine is as follows:
 
