@@ -8,6 +8,16 @@ redis = StrictRedis(host=os.environ.get("REDIS_HOST", "localhost"),
                     db=0)
 redis.flushall()
 
+def create_product(product):
+  p = redis.pipeline()
+  p.sadd("pre_assembled:" + str(product['pre_assembled']), product['sku'])
+  p.sadd("pickup_only:" + str(product['pickup_only']), product['sku'])
+  p.sadd("weight_in_kg:" + str(product['weight_in_kg']), product['sku'])
+  new_product = dict(product)
+  del new_product['sku']
+  p.hmset("products:" + product['sku'], new_product)
+  p.execute()
+
 def create_products():
   wheelbarrow = { 'sku': "123-ABC-723",
                   'name': "Wheelbarrow",
@@ -34,25 +44,18 @@ def create_products():
   create_product(pump)
   create_product(kite)
 
-def create_product(product):
-  p = redis.pipeline()
-  p.hset("products", product['sku'], json.dumps(product))
-  p.sadd("pre_assembled:" + str(product['pre_assembled']), product['sku'])
-  p.sadd("pickup_only:" + str(product['pickup_only']), product['sku'])
-  p.sadd("weight_in_kg:" + str(product['weight_in_kg']), product['sku'])
-  p.execute()
+
 
 def match(*keys):
   m = []
   matches = redis.sinter(keys)
   for sku in matches:
-    record = redis.hget("products", sku)
+    record = redis.hgetall("products:" + sku)
     m.append(record)
   return m
 
 # Find matches based on two criteria
 create_products()
-# create_lookups()
 
 # Find the match
 matches = match("pre_assembled:True", "pickup_only:False")
@@ -75,7 +78,7 @@ def match_hashed(lookup_key):
   h.update(str(lookup_key))
   matches = redis.smembers("lookups:" + h.hexdigest())
   for sku in matches:
-    record = redis.hget("products", sku)
+    record = redis.hgetall("products:" + sku)
     m.append(record)
   return m
 
