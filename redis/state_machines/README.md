@@ -357,6 +357,16 @@ Executed: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 S:entitlement FN:
 {'app:CNN:expires': '1514999299', 'created_at': '1514999288', 'app:CNN': 'MTOB1J', 'app:CNN:status': 'Active', 'app:CNN:failed': '0'}
 
 ```
+## Consideration - or what else do I need to think about?
+The above examples rely on the semantics of a single Redis server. If we consider the code in the ```transition``` function we can see commands that effect multiple keys in a single transaction:
+
+```python
+  p.lrem("events:" + queue + ":" + from_state, 0, id)
+  p.lpush("events:" + queue + ":" + to_state, id)
+  p.execute()   
+```
+
+In a Redis Cluster environment, the Transaction is only valid if all the keys are on the same, single server. We will revisit this problem in [another article](../cluster/README.md) and how [Key Hash Tags](https://redis.io/topics/cluster-spec#keys-hash-tags) can be used to eligantly solve this problem.
 
 ## Summary
 As you can see, building and manipulating data models to support state machines, queues and other structures is straight-forward with Redis.

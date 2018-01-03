@@ -125,11 +125,10 @@ In this article, we covered the basic concepts of:
 * Denormalization
 
 Other atricles in this series will cover
-### TODO - add links
 * [Faceted Query](faceting/README.md)
 * [State Machines & Queues](state_machines/README.md)
-* [Inventory Control](inventory/README.md)
-* [Activity Streams & Bucketing](activity_stream/README.md)
-* [Publish / Subscribe](pub_sub/README.md)
-* [Credit / Debit](credit_debit/README.md)
-* [Reparenting, bi­-directional associations](reparenting/README.md)
+* TODO [Inventory Control](inventory/README.md)
+* TODO [Activity Streams & Bucketing](activity_stream/README.md)
+* TODO [Publish / Subscribe](pub_sub/README.md)
+* TODO [Credit / Debit](credit_debit/README.md)
+* TODO [Reparenting, bi­-directional associations](reparenting/README.md)
