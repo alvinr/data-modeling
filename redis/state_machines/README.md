@@ -358,7 +358,7 @@ Executed: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 S:entitlement FN:
 
 ```
 
-# Summary
+## Summary
 As you can see, building and manipulating data models to support state machines, queues and other structures is straight-forward with Redis.
 
 In the [next article](../inventory/README.md), we will discuss how to manage a finite (and perishable) resource like tickets sales for the Olympics, and how to deal with reservations that you may need to back out on.
