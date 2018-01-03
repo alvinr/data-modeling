@@ -114,9 +114,9 @@ compensate on failure etc.), but that is beyond the scope of this article. The k
 When a service tries to activate, then we want to track the following:
 * Valid activation
 * Invalid activation
-** Attempts are <= 3
-** Attempts are > 3
-** Service is already suspended
+  * Attempts are <= 3
+  * Attempts are > 3
+  * Service is already suspended
 
 Lets look at the code to support this entitlement flow:
 

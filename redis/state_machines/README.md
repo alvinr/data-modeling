@@ -121,9 +121,9 @@ First a ```watch``` is created for the key we are interested in, we can then con
 ## Tracking Service Activation Attempts
 When a service tries to activate, then we want to track the following:
 * Valid token for activation
-* Invalid toekn for activation
-** Attempts are <= 3
-** Attempts are > 3
+* Invalid token for activation
+  * Attempts are <= 3
+  * Attempts are > 3
 
 Lets look at the code to support this entitlement flow:
 
@@ -187,7 +187,7 @@ do_entitlement({'device': device_id, 'service': service1, 'token': token})
 print "service: {} is {}".format(service1, redis.hget("accounts:" + device_id, "app:" + service1 + ":status"))
 ```
 
-The ```do_entitlement``` function transitions to the various states, depending on the evaluation of the current state. When you run the code, you will see the following:
+While the ```do_entitlement``` function shoudl probably be broken down, the code is kept together so that you can see the processing of the various states. It checkes the current state to determine what processing needs to occur, and then transitions to the various other states, depending on the evaluation of the current state. When you run the code, you will see the following transition from ```Waiting``` to ```Active```.
 
 ```
 >>> do_entitlement({'device': device_id, 'service': service1, 'token': token})
@@ -195,7 +195,7 @@ The ```do_entitlement``` function transitions to the various states, depending o
 service: NBCSports is Active
 ```
 
-We can also test the state transition when we exceed the number of attempts:
+We can also test the state transition from ```Waiting``` to ```Suspended``` when we exceed the number of attempts:
 ```
 >>> # Tokens do not match, so state of "ABC" is moved to Suspended after 3rd failed attempt
 ... for i in range(4):
@@ -216,12 +216,13 @@ Let's say the marketing team at NBC wanted to know every new service activation 
 * Activate the service for the device
 * Add the device as eligible for offers, etc.
 
-There are several ways to model this, but for our example, let's use a queue. What we will do is use the service activation request event to add an item to a queue. Then, all the interested processes can use this record to trigger subsequent processing. This means that we do not need multi­record transactions to activate and extend offers. We have one record that several separate processes can now manipulate independently. 
+There are several ways to model this, but for our example, let's use a queue. What we will do is use the service activation request event to add an item to a queue. Then, all the interested processes can use this record to trigger subsequent processing as can be seen in Figure-2. T
 
 ![Alt text](figure-2.png "Figure­-2: State Machine for queue flow")
 
 **Figure­-2: State Machine for queue flow**
 
+This means that we do not need multi­record transactions to activate and extend offers. We have one record that several separate processes can now manipulate independently; its simple to extend this state machine to subscribe to events and process them - but will cover the Publish/Subscribe pattern is a [later article](../pub_sub/README.md)
 
 Here's an example of what that would look like in JSON:
 
@@ -245,7 +246,7 @@ event_payload: "ea498100-bd87-48dc-bb0d-79064ee6d8c4"
 
 ```
 
-In the above example, we are going to use the ```todo``` list to track new incoming requests and the ```provision``` and ```entitlement``` lists to track the separate workflows. The ```event_payload``` is used to store the details about the actual event being processed, in a hash to allow for simple acccess to the individual attributes. The queues themselves simple contain the unique ID of the event store din ```event_payload```.
+In the above example, we are going to use the ```todo``` list to track new incoming requests and the ```provision``` and ```entitlement``` lists to track the separate workflows. The ```event_payload``` is used to store the details about the actual event being processed, in a hash to allow for simple acccess to the individual attributes. The queues themselves simple contain the unique ID of the event stored in ```event_payload```.
 
 Let's take a look at the code to support this:
 
@@ -275,7 +276,7 @@ def transition(queue, from_state, to_state, fn):
       p.reset()  
 ```
 
-The ```transition`` function handles the queues and the transition of tasks between the queues. We use [```BRPOPLPUSH```](https://redis.io/commands/brpoplpush) to form a [circular list](https://redis.io/commands/rpoplpush#pattern-circular-list), as wepop the next item we add back on the end of the list. The ```B```blocking version of this function simply will wait for an item to be added to the list, or for the timeout to occur (which we set to 1 second to make testing simpler). The first time we see the ```event``` we invoke the function ```fn()``` that is passed as a parameter and update the hash on compeltion. The second time we see the ```event``` we remove it from the source list and add it to the traget list, if effect transitionign the state of the ```event``` and making it ready for the next step in the process.
+The ```transition``` function handles the queues and the transition of tasks between the queues. We use [```BRPOPLPUSH```](https://redis.io/commands/brpoplpush) to form a [circular list](https://redis.io/commands/rpoplpush#pattern-circular-list), as wepop the next item we add back on the end of the list. The ```B```blocking version of this function simply will wait for an item to be added to the list, or for the timeout to occur (which we set to 1 second to make testing simpler). The first time we see the ```event``` we invoke the function ```fn()``` that is passed as a parameter and update the hash on compeltion. The second time we see the ```event``` we remove it from the source list and add it to the traget list, if effect transitionign the state of the ```event``` and making it ready for the next step in the process.
 
 
 Each state handler is then defined in a simple wrapper function of the ```transition``` function, specifiying the from and to states, plus the function to execute.
