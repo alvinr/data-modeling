@@ -1,7 +1,7 @@
 # State Machines & Queues
 A common data pattern revolves around managing state and ensuring that transitions between states happen in a consistent way. This could be anything from a fulfillment process to workflows or other systems where you need to maintain state.
 
-# Provisioning
+## Provisioning
 Let's consider a simple provisioning system (see Figure­-1); it could be a signup form for a new web site, or automatic provisioning of infrastructure, etc. In this example, let's consider setting up your new Apple TV, Amazon Fire TV or Android TV device, and using one of the applications such as "NBC Sports".
 
 ![Alt text](figure-1.png "Figure­-1: State Machine for managing relationship end transfer")
@@ -100,7 +100,7 @@ When you run the code, you will see the following:
 
 ```
 
-# Avoiding Updates by Other Threads and Processes
+## Avoiding Updates by Other Threads and Processes
 Since we are first reading the hash and then setting values at a later stage, we use the [compare-and-set pattern](https://redis.io/topics/transactions#optimistic-locking-using-check-and-set). Distilling the code from above we have the following pattern:
 
 ```python
@@ -113,11 +113,12 @@ try:
 except WatchError:
   print "Write Conflict: {}".format(my_key)
 finally:
-  p.reset()  
+  p.reset()
+```
 
 First a ```watch``` is created for the key we are interested in, we can then continue to set values within a Transaction (and since this is Python, we use the ```pipeline``` construct) until the Transaction is executed. If the key was changed, then an exception will be thrown when the transaction is executed. There are several ways we can deal with that (e.g., re­query the record and try the transaction again, return an error to the user, compensate on failure etc.), but that is beyond the scope of this article. The key point is that you can track these changes  - and act on them - programmatically.
 
-# Tracking Service Activation Attempts
+## Tracking Service Activation Attempts
 When a service tries to activate, then we want to track the following:
 * Valid token for activation
 * Invalid toekn for activation
@@ -244,7 +245,7 @@ event_payload: "ea498100-bd87-48dc-bb0d-79064ee6d8c4"
 
 ```
 
-In the above example, we are going to use the ```todo``` list to track new incoming requests and the ```provision``` and ```entitlement``` lists to track the separate workflows, so that each process can record its progress.
+In the above example, we are going to use the ```todo``` list to track new incoming requests and the ```provision``` and ```entitlement``` lists to track the separate workflows. The ```event_payload``` is used to store the details about the actual event being processed, in a hash to allow for simple acccess to the individual attributes. The queues themselves simple contain the unique ID of the event store din ```event_payload```.
 
 Let's take a look at the code to support this:
 
@@ -274,7 +275,7 @@ def transition(queue, from_state, to_state, fn):
       p.reset()  
 ```
 
-The ```transition`` function handles the queues and the transition of tasks between the queues. We use [```BRPOPLPUSH```](https://redis.io/commands/brpoplpush) to form a [circular list](https://redis.io/commands/rpoplpush#pattern-circular-list), as pop the next item we add back on the end of the list. The first time we see the ```event``` we invoke the function ```fn()``` that is passed as a parameter and update the hash on compeltion. The second time we see the ```event``` we remove it from the source list and add it to the traget list, if effect transitionign the state of the ```event``` and making it ready for the next step in the process.
+The ```transition`` function handles the queues and the transition of tasks between the queues. We use [```BRPOPLPUSH```](https://redis.io/commands/brpoplpush) to form a [circular list](https://redis.io/commands/rpoplpush#pattern-circular-list), as wepop the next item we add back on the end of the list. The ```B```blocking version of this function simply will wait for an item to be added to the list, or for the timeout to occur (which we set to 1 second to make testing simpler). The first time we see the ```event``` we invoke the function ```fn()``` that is passed as a parameter and update the hash on compeltion. The second time we see the ```event``` we remove it from the source list and add it to the traget list, if effect transitionign the state of the ```event``` and making it ready for the next step in the process.
 
 
 Each state handler is then defined in a simple wrapper function of the ```transition``` function, specifiying the from and to states, plus the function to execute.
