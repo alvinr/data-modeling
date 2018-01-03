@@ -1,4 +1,4 @@
-from redis import StrictRedis
+from redis import StrictRedis, WatchError
 import os
 import time
 import random
@@ -12,6 +12,9 @@ redis = StrictRedis(host=os.environ.get("REDIS_HOST", "localhost"),
                     db=0)
 redis.flushall()
 
+# Short expiration, to allow simpler testing, but this could be any value (e.g. 28 days)
+token_expiration = 5
+
 def create_account(device):
   redis.hset("accounts:" + device, 'created_at', long(time.time()))
 
@@ -19,84 +22,101 @@ def generate_token():
   return ''.join(random.choice(string.ascii_uppercase + string.digits) \
     for _ in range(6))
 
-def do_provision(event):
+def do_activate(event):
   if event['token'] == "":
     event['token'] = generate_token()
-  redis.watch("accounts:" + event['device'])
-  account = redis.hgetall("accounts:" + event['device'])
-  if 'app:' + event['token'] in account.keys():
-    if account['app:' + event['service'] + ":status"] in ["New", "Suspended"]:
-      p = redis.pipeline()
-      data = {}
-      data['app:' + event['service'] + ':ts'] = long(time.time())
-      p.hmset("accounts:" + event['device'], data)
-      p.execute()
-  else:
+  try:
     p = redis.pipeline()
-    p.hsetnx("accounts:" + event['device'], 'app:' + event['service'], event['token'])
-    data = {}
-    data['app:' + event['service'] + ':ts'] = long(time.time())
-    data['app:' + event['service'] + ':status'] = "Waiting"
-    data['app:' + event['service'] + ':failed'] = 0
-    p.hmset("accounts:" + event['device'], data)
-    p.execute()
+    redis.watch("accounts:" + event['device'])
+    account = redis.hgetall("accounts:" + event['device'])
+    if 'app:' + event['service'] not in account.keys():
+      data = {}
+      data['app:' + event['service'] + ':status'] = "Waiting"
+      data['app:' + event['service'] + ':failed'] = 0
+      p.hmset("accounts:" + event['device'], data)
+      p.hsetnx("accounts:" + event['device'], 'app:' + event['service'], event['token'])
+      p.execute()
+  except WatchError:
+    print "Write Conflict: {}".format("accounts:" + event['device'])
+  finally:
+    p.reset()
 
 device_id = "ATV-123"
 service1 = "NBCSports"
 token = "MTOB1J"
 service2 = "ABC"
 
-# Part One - Provision the device
+# Part One - Provision the device with two services
 create_account(device_id)
-do_provision({'device': device_id, 'service': service1, 'token': token})
+do_activate({'device': device_id, 'service': service1, 'token': token})
 print redis.hgetall("accounts:" + device_id)
 
-do_provision({'device': device_id, 'service': service2, 'token': ""})
+do_activate({'device': device_id, 'service': service2, 'token': ""})
 print redis.hgetall("accounts:" + device_id)
 
 # Part Two - Entitlement
 def do_entitlement(event):
-  redis.watch("accounts:" + event['device'])
-  account = redis.hgetall("accounts:" + event['device'])
-  if 'app:' + event['service'] in account.keys():
-    service_rec = {}
-    if account['app:' + event['service']] == token:
-      # Valid, so update last_logon_ts etc
-        p = redis.pipeline()
-        service_rec['app:' + event['service'] + ':failed'] = 0
-        service_rec['app:' + event['service'] + ':last_logon_ts'] = long(time.time())
-        service_rec['app:' + event['service'] + ':status'] = 'Active'
-        p.hmset("accounts:" + event['device'], service_rec)
-        p.execute()
-    else:
-      if account['app:' + event['service'] + ':status'] in ["Waiting", "Suspended"]:
-        if account['app:' + event['service'] + ':failed'] < 3:
-          # increment and update last timestamp
-          p = redis.pipeline()
-          p.hset("accounts:" + event['device'], 'app:' + event['service'] + ':last_logon_ts', long(time.time()))
-          p.hincrby("accounts:" + event['device'], 'app:' + event['service'] + ':failed', 1)
-          p.execute()
+  try:
+    p = redis.pipeline()
+    redis.watch("accounts:" + event['device'])
+    account = redis.hgetall("accounts:" + event['device'])
+    if 'app:' + event['service'] in account.keys():
+      service_rec = {}
+      if account['app:' + event['service'] + ':status'] == "Waiting":
+        if account['app:' + event['service']] == event['token']:
+          # Matching token, activate service
+          service_rec['app:' + event['service'] + ':failed'] = 0
+          service_rec['app:' + event['service'] + ':status'] = 'Active' 
+          p.hmset("accounts:" + event['device'], service_rec)
+          p.hsetnx("accounts:" + event['device'], 'app:' + event['service'] + ':expires', long(time.time() + token_expiration))
+          p.execute()       
         else:
-          # Exceeded limit
-          p = redis.pipeline()
-          service_rec['app:' + event['service'] + ':status'] = "Suspended"
-          service_rec['app:' + event['service'] + ':last_logon_ts'] = long(time.time())
+          # Token not matched, determine if the account needs to be suspended
+          if int(account['app:' + event['service'] + ':failed']) < 3:
+            # increment and update last timestamp
+            p.hincrby("accounts:" + event['device'], 'app:' + event['service'] + ':failed', 1)
+            p.execute()
+          else:
+            # Exceeded limit
+            service_rec['app:' + event['service'] + ':status'] = "Suspended"
+            p.hmset("accounts:" + event['device'], service_rec)
+            p.execute()
+      elif account['app:' + event['service'] + ':status'] == "Active":
+        if long(account['app:' + event['service'] + ':expires']) >= long(time.time()):
+          # Token not expired, so update
+          service_rec['app:' + event['service'] + ':failed'] = 0
           p.hmset("accounts:" + event['device'], service_rec)
           p.execute()
-      else:
-          # Record the attempt, even if the account is suspended
-          p = redis.pipeline()
-          p.hset("accounts:" + event['device'], 'app:' + event['service'] + ':last_logon_ts', long(time.time()))
-          p.hincrby("accounts:" + event['device'], 'app:' + event['service'] + ':failed', 1)
+        else:
+          # Token expired, so suspend
+          service_rec['app:' + event['service'] + ':failed'] = 0
+          service_rec['app:' + event['service'] + ':status'] = 'Suspended' 
+          p.hmset("accounts:" + event['device'], service_rec)
+          p.hdel("accounts:" + event['device'], 'app:' + event['service'] + ':expires')
           p.execute()
+      elif account['app:' + event['service'] + ':status'] == "Suspended":
+        # Generate new Token and transition back to Waiting state
+        if event['token'] == "":
+          service_rec['app:' + event['service']] = generate_token()
+        else:
+          service_rec['app:' + event['service']] = event['token']
+        service_rec['app:' + event['service'] + ':failed'] = 0
+        service_rec['app:' + event['service'] + ':status'] = 'Waiting' 
+        p.hmset("accounts:" + event['device'], service_rec)
+        p.execute()
+  except WatchError:
+    print "Write Conflict: {}".format("accounts:" + event['device'])
+  finally:
+    p.reset()
 
 # Entitlement will move the state for "NBCSports", if the tokens match
 do_entitlement({'device': device_id, 'service': service1, 'token': token})
-print redis.hgetall("accounts:" + device_id)
+print "service: {} is {}".format(service1, redis.hget("accounts:" + device_id, "app:" + service1 + ":status"))
 
-# Tokens do not match, so state of "ABC" is unchanged
-do_entitlement({'device': device_id, 'service': service2, 'token': token})
-print redis.hgetall("accounts:" + device_id)
+# Tokens do not match, so state of "ABC" is moved to Suspended after 3rd failed attempt
+for i in range(4):
+  do_entitlement({'device': device_id, 'service': service2, 'token': token})
+  print "service: {} is {}".format(service2, redis.hget("accounts:" + device_id, "app:" + service2 + ":status"))
 
 # Part Three - Wrap the process into the State Machines
 def do_start(event):
@@ -108,29 +128,32 @@ def do_finish(event):
 def transition(queue, from_state, to_state, fn):
   # Take the next todo and create new entries into each workflow
   id = redis.brpoplpush("events:" + queue + ":" + from_state, "events:" + queue + ":" + from_state, 1)
-  # id = redis.rpoplpush("events:" + queue + ":" + from_state, "events:" + queue + ":" + from_state)
   if id != None:
-    redis.watch("event_playload:" + id)
-    event = redis.hgetall("event_payload:" + id)
-    if event['last_step'] == from_state:
-      fn(event)
-      data = { 'ts': long(time.time()), 'last_step': to_state }
+    try:
       p = redis.pipeline()
-      p.hmset("event_payload:" + id, data)
-      p.execute()
-      print "Q:{} F:{} T:{} ID:{}".format(queue, from_state, to_state, id)
-    elif event['last_step'] == to_state:
-      p = redis.pipeline()
-      p.lrem("events:" + queue + ":" + from_state, 0, id)
-      p.lpush("events:" + queue + ":" + to_state, id)
-      p.execute()   
-      print "Q:{} F:{} T:{} ID:{}".format(queue, from_state, to_state, id)
+      redis.watch("event_playload:" + id)
+      event = redis.hgetall("event_payload:" + id)
+      if event['last_step'] == from_state:
+        fn(event)
+        data = { 'ts': long(time.time()), 'last_step': to_state }
+        p.hmset("event_payload:" + id, data)
+        p.execute()
+        print "Executed: Q:{} ID:{} S:{} FN:{}".format(queue, id, from_state, fn.__name__)
+      elif event['last_step'] == to_state:
+        p.lrem("events:" + queue + ":" + from_state, 0, id)
+        p.lpush("events:" + queue + ":" + to_state, id)
+        p.execute()   
+        print "Transitioned: Q:{} ID:{} F:{} T:{}".format(queue, id, from_state, to_state)
+    except WatchError:
+      print "Write Conflict: {}".format("event_payload:" + id)
+    finally:
+      p.reset()
 
 def process_start(queue):
   transition(queue, "start", "todo", do_start)
 
-def process_provision(queue):
-  transition(queue, "todo", "provision", do_provision)
+def process_activation(queue):
+  transition(queue, "todo", "provision", do_activate)
 
 def process_entitlement(queue):
   transition(queue, "provision", "entitlement", do_entitlement)
@@ -155,12 +178,12 @@ def create_activation(queue, device, service, token):
 # Create the activation event
 device_id = "MYTV-678"
 create_account(device_id)
-create_activation("new-device", device_id, "NBCSports", token)
+create_activation("new-device", device_id, "CNN", token)
 
 # Process the outstanding todo
 while True:
   process_start("new-device")
-  process_provision("new-device")
+  process_activation("new-device")
   process_entitlement("new-device")
   process_finish("new-device")
   if int(redis.get("events_oustanding")) == 0:
@@ -170,51 +193,68 @@ print redis.hgetall("accounts:" + device_id)
 
 # Part Four - Service threads
 
-def threadStart(queue):
+def thread_Start(queue):
   while True:
     process_start(queue)
 
-def threadProvision(queue):
+def thread_Activation(queue):
   while True:
-    process_provision(queue)
+    process_activation(queue)
 
-def threadEntitlement(queue):
+def thread_Entitlement(queue):
   while True:
     process_entitlement(queue)
 
-def threadFinish(queue):
+def thread_Finish(queue):
   while True:
     process_finish(queue)
 
-threads = []
-threads.append(threading.Thread(target=threadStart, args=("new-device",)))
-threads.append(threading.Thread(target=threadProvision, args=("new-device",)))
-threads.append(threading.Thread(target=threadEntitlement, args=("new-device",)))
-threads.append(threading.Thread(target=threadFinish, args=("new-device",)))
+def wait_for_queues_to_empty():
+  while True:
+    time.sleep(1)
+    if int(redis.get("events_oustanding")) == 0:
+      break  
 
-device_id = "MYTV-999"
-create_account(device_id)
-create_activation("new-device", device_id, "NBCSports", token)
-create_activation("new-device", device_id, "ABC", "")
-create_activation("new-device", device_id, "Velocity", "")
-create_activation("new-device", device_id, "Velocity", "")
-create_activation("new-device", device_id, "Velocity", "")
-create_activation("new-device", device_id, "Velocity", "")
+threads = []
+threads.append(threading.Thread(target=thread_Start, args=("new-device",)))
+threads.append(threading.Thread(target=thread_Activation, args=("new-device",)))
+threads.append(threading.Thread(target=thread_Entitlement, args=("new-device",)))
+threads.append(threading.Thread(target=thread_Finish, args=("new-device",)))
 
 for i in range(len(threads)):
   threads[i].setDaemon(True)
   threads[i].start()
 
-while True:
-  time.sleep(1)
-  if int(redis.get("events_oustanding")) == 0:
-    break
+device_id = "MYTV-999"
+create_account(device_id)
+# Activation with correct token
+create_activation("new-device", device_id, "NBCSports", token)
 
+# Activation with 3 incorrect tokens, so Suspend
+for i in range(4):
+  create_activation("new-device", device_id, "ABC", "")
+
+wait_for_queues_to_empty()
 print redis.hgetall("accounts:" + device_id)
 
-for i in range(len(threads)):
-  threads[i].stop()
+# Activate again, which will generate a new token and transition to Waiting
+valid_token = generate_token()
+create_activation("new-device", device_id, "ABC", valid_token)
+wait_for_queues_to_empty()
+print redis.hgetall("accounts:" + device_id)
 
+# Activation now in Waiting state, so send correct token
+create_activation("new-device", device_id, "ABC", valid_token)
+wait_for_queues_to_empty()
+print redis.hgetall("accounts:" + device_id)
+
+# Since the tokens expire in 5 seconds, wait 5 seconds and try to activate the ABC again to 
+# transition into the Suspended state again
+time.sleep(token_expiration)
+create_activation("new-device", device_id, "ABC", valid_token)
+
+wait_for_queues_to_empty()
+print redis.hgetall("accounts:" + device_id)
 
 
 
