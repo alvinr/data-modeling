@@ -219,6 +219,7 @@ events:
     sold_to: [],
     reservations: {'Fred': {'ts': 1469744519, 'qty': 5}}
   }
+```
 
 The reserve function can now do the following:
 * Create a reservation if there is sufficient stock

@@ -56,8 +56,8 @@ print redis.hgetall("accounts:" + device_id)
 
 # Part Two - Entitlement
 def do_entitlement(event):
+  p = redis.pipeline()
   try:
-    p = redis.pipeline()
     redis.watch("accounts:" + event['device'])
     account = redis.hgetall("accounts:" + event['device'])
     if 'app:' + event['service'] in account.keys():
@@ -127,10 +127,10 @@ def do_finish(event):
 
 def transition(queue, from_state, to_state, fn):
   # Take the next todo and create new entries into each workflow
+  p = redis.pipeline()
   id = redis.brpoplpush("events:" + queue + ":" + from_state, "events:" + queue + ":" + from_state, 1)
   if id != None:
     try:
-      p = redis.pipeline()
       redis.watch("event_playload:" + id)
       event = redis.hgetall("event_payload:" + id)
       if event['last_step'] == from_state:
