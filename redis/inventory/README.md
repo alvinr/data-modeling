@@ -10,7 +10,7 @@ available pool
 
 ## Simple Purchase
 
-Lets model the ```events``` and the ```users```. Here's an example in JSON:
+Lets model the ```events``` and the ```orders```. Here's an example in JSON:
 
 ```
 events: "Mens 100m Final"
@@ -86,7 +86,7 @@ print redis.lrange("orders:" + for_event, 0, -1)
 print redis.hgetall("events:" + for_event)
 ```
 
-As you can see, the ```check_availability_and_purchase``` function deducts the quantity requested from the ```event``` if there is availbaility and adds a list entry to the ```orders```. Since other ticket sales could happen in parallel, then we use the [compare-and-set pattern](https://redis.io/topics/transactions#optimistic-locking-using-check-and-set) as discussed previously. This means creating a ```watch``` on the event we are reserving tickets for, which will cause the Transaction to fail if the event is changed by the time the ```execute``` in invoked.
+As you can see, the ```check_availability_and_purchase``` function deducts the quantity requested from the ```event``` if there is availability and adds a list entry to the ```orders```. Since other ticket sales could happen in parallel, then we use the [compare-and-set pattern](https://redis.io/topics/transactions#optimistic-locking-using-check-and-set) as discussed previously. This means creating a ```watch``` on the event we are reserving tickets for, which will cause the Transaction to fail if the event is changed by the time the ```execute``` in invoked.
 
 Running the code, you will see the following output:
 
@@ -126,7 +126,7 @@ The reserve function can now do the following:
 * Create a reservation if there is sufficient stock
 * Perform authorization for the transaction (e.g., via Credit Card)
 * Remove the reservation for the event
-* Add the sale to the orders list
+* Add the purchase to the orders list
 
 ```python
 def reserve(user, event_name, qty):
@@ -161,14 +161,13 @@ def reserve(user, event_name, qty):
     finally:
       p.reset()
   else:
+    print "Auth failure on order {} for {}".format(order_id, user)
     backout_reservation(user, event_name, qty)
+```
 
-def creditcard_auth(user):
-  # TODO: Credit card auth happens here, but lets just sleep
-  # return random.choice([True, False])
-  time.sleep(1)
-  return True
+The ```backout_reservation``` function take care of adjusting the ```availbale``` tickets and removing the reservation details.
 
+```python
 def backout_reservation(user, event_name, qty):
   p = redis.pipeline()
   try:
@@ -182,6 +181,16 @@ def backout_reservation(user, event_name, qty):
     print "Write Conflict: {}".format("events:" + event_name)
   finally:
     p.reset()
+```
+
+We add two items into the ```events``` hash, ```reservation-user``` and ```reservation-ts```. These track who and the time which the reservation was made, which will help to create a process to back out these reservation if a timeout expires or other failure event, which is encapsulated in the ```backout_reservation``` function.
+
+To complete the code, we have a dummy ```creditcard_auth``` function - which just returns a random True/False so that we can see failures occur.
+
+```python
+def creditcard_auth(user):
+  # TODO: Credit card auth happens here, but lets randomly fail
+  return random.choice([True, False])
 
 # Query results
 for_event = "Womens Marathon Final"
@@ -209,6 +218,14 @@ The ```reserve``` function contains the main purchase flow. The reservation is m
 So we are only left to deal with expiring reservations, the customer does not complete the purchase, code or machines crash etc.. Given that we set a timestamp when the reservation was made, it becomes pretty simple to check if the reservation has expired: remove that element from the ```reservations``` list and add the quantity reserved back to the total available for the event.
 
 ```python
+def expire_reservation(event_name):
+  cutoff_ts = long(time.time()-30)
+  for i in redis.hscan_iter("events:" + event_name, match="reservations-ts:*"):
+    if long(i[1]) < cutoff_ts:
+      (_, user) = i[0].split(":")
+      qty = int(redis.hget("events:" + event_name, "reservations-user:" + user))
+      backout_reservation(user, event_name, qty) 
+
 def create_expired_reservation(event_name):
   p = redis.pipeline()
   p.hset("events:" + event_name, "available", 485)
@@ -219,15 +236,7 @@ def create_expired_reservation(event_name):
   p.hset("events:" + event_name, "reservations-ts:Jim", long(time.time() - 22))
   p.hset("events:" + event_name, "reservations-user:Amy", 7)
   p.hset("events:" + event_name, "reservations-ts:Amy", long(time.time() - 30))
-  p.execute()
-
-def expire_reservation(event_name):
-  cutoff_ts = long(time.time()-30)
-  for i in redis.hscan_iter("events:" + event_name, match="reservations-ts:*"):
-    if long(i[1]) < cutoff_ts:
-      (_, user) = i[0].split(":")
-      qty = int(redis.hget("events:" + event_name, "reservations-user:" + user))
-      backout_reservation(user, event_name, qty)  
+  p.execute() 
 
 # Expire reservations
 for_event = "Womens Javelin"
@@ -335,6 +344,7 @@ def reserve_with_pending(user, event_name, qty):
     finally:
       p.reset()
   else:
+    print "Auth failure on order {} for {}".format(order_id, user)
     backout_reservation(user, event_name, qty)
 ```
 
@@ -353,9 +363,9 @@ def post_purchases(event_name):
     p.execute()
 ```
 
-Since the Sales and Marketing teams also want to know the total sales and availbale tickets for the event, we maintain two counters in the hash ```sales_summary```.
+Since the Sales and Marketing teams also want to know the total sales and availbale tickets for the event, we maintain two counters in the hash ```sales_summary```. It should be noted, that simply popping the ```pending``` queue could result in the loss of this event if a crash or other event was to occur. As we saw in the [state machine](../state_mchines/README.md) article, there are patterns to deal with this problem, so will omit here for sake of clarity.
 
-We can now create a new events and purchases
+We can now create a new events and purchases:
 
 ```
 events = [

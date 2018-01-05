@@ -87,13 +87,12 @@ def reserve(user, event_name, qty):
     finally:
       p.reset()
   else:
+    print "Auth failure on order {} for {}".format(order_id, user)
     backout_reservation(user, event_name, qty)
 
 def creditcard_auth(user):
-  # TODO: Credit card auth happens here, but lets just sleep
-  # return random.choice([True, False])
-  time.sleep(1)
-  return True
+  # TODO: Credit card auth happens here, but lets randomly fail
+  return random.choice([True, False])
 
 def backout_reservation(user, event_name, qty):
   p = redis.pipeline()
@@ -185,6 +184,7 @@ def reserve_with_pending(user, event_name, qty):
     finally:
       p.reset()
   else:
+    print "Auth failure on order {} for {}".format(order_id, user)
     backout_reservation(user, event_name, qty)
 
 def post_purchases(event_name):
