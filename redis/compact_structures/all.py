@@ -23,8 +23,8 @@ def increment_str(s):
 	return new_s
 
 def create_event(event_name, rows, seats_per_row):
-	redis.hset("events:" + event_name, "rows", rows)
-	redis.hset("events:" + event_name, "seats_per_row", seats_per_row)
+	# redis.hset("events:" + event_name, "rows", rows)
+	# redis.hset("events:" + event_name, "seats_per_row", seats_per_row)
 	row_name = "A"
 	for i in range(rows):
 		filled_seat_map = int(math.pow(2,seats_per_row))-1
@@ -123,8 +123,8 @@ def reservation(event_name, row_name, first_seat, last_seat):
 				        struct.pack('l',required_block),
 				        px=5000, nx=True)
 			p.bitop("XOR", "events:" + event_name + ":" + row_name, 
-				             "events:" + event_name + ":" + row_name, 
-				             "orders:" + event_name + ":" + row_name + ":" + order_id)
+				           "events:" + event_name + ":" + row_name, 
+				           "orders:" + event_name + ":" + row_name + ":" + order_id)
 			p.execute()
 			reserved = True
 	except WatchError:

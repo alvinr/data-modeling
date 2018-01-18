@@ -128,6 +128,7 @@ Other atricles in this series will cover
 * [Faceted Query](faceting/README.md)
 * [State Machines & Queues](state_machines/README.md)
 * [Inventory Control](inventory/README.md)
+* [Compact Structures](compact_structures/README.md)
 * TODO [Activity Streams & Bucketing](activity_stream/README.md)
 * TODO [Publish / Subscribe](pub_sub/README.md)
 * TODO [Credit / Debit](credit_debit/README.md)

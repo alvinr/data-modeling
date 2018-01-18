@@ -23,7 +23,6 @@ orders: "Mens 100m Final"
   [
     { 'who': "Fred", 'qty': 5, 'price': 45, 'order_id': "XSFPV5"}
   ]
-
 ```
 
 So when we come to purchase 5 tickets for this event, it will require two updates: one to decrement the available quantity on the ```event``` record, and a second update to insert into the ```orders``` lists. In Python, this would look like:
@@ -360,10 +359,16 @@ def post_purchases(event_name):
     p.sadd("sales:" + event_name, order_id)
     p.hincrbyfloat("sales_summary", event_name + ":total_sales", order['cost'])
     p.hincrby("sales_summary", event_name + ":total_tickets_sold", order['qty'])
+    hour_of_day = int(time.strftime("%H"))
+    vals = ["INCRBY", "u8", (hour_of_day+1) * 8, order['qty']]
+    p.execute_command("BITFIELD", "sales_histogram:time_of_day", *vals)
+    p.execute_command("BITFIELD", "sales_histogram:time_of_day:" + event_name, *vals)
     p.execute()
 ```
 
 Since the Sales and Marketing teams also want to know the total sales and availbale tickets for the event, we maintain two counters in the hash ```sales_summary```. It should be noted, that simply popping the ```pending``` queue could result in the loss of this event if a crash or other event was to occur. As we saw in the [state machine](../state_mchines/README.md) article, there are patterns to deal with this problem, so will omit here for sake of clarity.
+
+As always, the Sales and Marketing team came back with a requirement to know on an hour-by-hour basis, the total tickets sold. We can use the power of redis [bitmaps](https://redis.io/topics/data-types-intro#bitmaps) to store and manipulate 24 counters that represent each hour. We use the [BITFIELD](https://redis.io/commands/bitfield) to manipulate each counter. This provides a compact way to store and access the sturcture to maintain the totals and report the current sales.
 
 We can now create a new events and purchases:
 
@@ -394,6 +399,12 @@ for i in redis.scan_iter(match="purchase_orders:*"):
 
 print "=== Sales Summary \n{}".format(redis.hgetall("sales_summary"))
 
+print "=== Sales Summary - hour of sale histogram"
+hist = redis.get("sales_histogram:time_of_day")
+for i in range(0, 24):
+  vals = ["GET", "u8", (i+1) * 8]
+  total_sales = int(redis.execute_command("BITFIELD", "sales_histogram:time_of_day", *vals)[0])
+  print " {} = {}".format(i, total_sales)
 ```
 
 When you run the code, you will see the following output:
@@ -421,9 +432,34 @@ Invoices for Amy: set(['9VJW3N', '2P3C8S'])
 >>> print "=== Sales Summary \n{}".format(redis.hgetall("sales_summary"))
 === Sales Summary 
 {'Mens Discus:total_sales': '70', 'Womens Discus:total_tickets_sold': '37', 'Womens Discus:total_sales': '555', 'Mens Discus:total_tickets_sold': '7'}
+=== Sales Summary - hour of sale histogram
+ 0 = 0
+ 1 = 0
+ 2 = 0
+ 3 = 0
+ 4 = 0
+ 5 = 0
+ 6 = 0
+ 7 = 0
+ 8 = 0
+ 9 = 0
+ 10 = 0
+ 11 = 0
+ 12 = 0
+ 13 = 0
+ 14 = 0
+ 15 = 0
+ 16 = 0
+ 17 = 0
+ 18 = 0
+ 19 = 0
+ 20 = 44
+ 21 = 0
+ 22 = 0
+ 23 = 0
 ```
 
 ## Summary
 As we have seen, dealing with multi­step transactions is simple. Careful consideration needs to be made around transaction boundaries ­- remember that value smay be morphed by another process between reading and modifying a value. This means you need to approach your domain problem with this in mind, ensuring that multi­step transaction are replayable or you have adequate ways to compensate on failure.
 
-In the next article, we will talk about the [bucketing pattern](../activity_stream/README.md), and how to deal with an activity stream like a Slack or Twitter feed.
+In the next article, we will talk about the [compact structures](../compact_structures/README.md), and how we can extend our inventory control system for the Olympics to handle seat allocations and reservations.
