@@ -4,6 +4,7 @@ import time
 import random
 import string
 import json
+from datetime import date
 
 redis = StrictRedis(host=os.environ.get("REDIS_HOST", "localhost"), 
                     port=os.environ.get("REDIS_PORT", 6379),
@@ -92,7 +93,8 @@ def reserve(user, event_name, qty):
 
 def creditcard_auth(user):
   # TODO: Credit card auth happens here, but lets randomly fail
-  return random.choice([True, False])
+  # return random.choice([True, False])
+  return True
 
 def backout_reservation(user, event_name, qty):
   p = redis.pipeline()
@@ -196,6 +198,10 @@ def post_purchases(event_name):
     p.sadd("sales:" + event_name, order_id)
     p.hincrbyfloat("sales_summary", event_name + ":total_sales", order['cost'])
     p.hincrby("sales_summary", event_name + ":total_tickets_sold", order['qty'])
+    hour_of_day = int(time.strftime("%H"))
+    vals = ["INCRBY", "u8", (hour_of_day+1) * 8, order['qty']]
+    p.execute_command("BITFIELD", "sales_histogram:time_of_day", *vals)
+    p.execute_command("BITFIELD", "sales_histogram:time_of_day:" + event_name, *vals)
     p.execute()
 
 # Post purchases and query results
@@ -224,4 +230,12 @@ for i in redis.scan_iter(match="purchase_orders:*"):
   print redis.get(i)  
 
 print "=== Sales Summary \n{}".format(redis.hgetall("sales_summary"))
+
+print "=== Sales Summary - hour of sale histogram"
+hist = redis.get("sales_histogram:time_of_day")
+for i in range(0, 24):
+  vals = ["GET", "u8", (i+1) * 8]
+  total_sales = int(redis.execute_command("BITFIELD", "sales_histogram:time_of_day", *vals)[0])
+  print " {} = {}".format(i, total_sales)
+
 
