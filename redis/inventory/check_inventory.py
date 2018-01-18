@@ -1,10 +1,10 @@
 from redis import StrictRedis, WatchError
 import os
-import time
-import random
 import string
 import json
 import math
+import random
+import struct
 
 redis = StrictRedis(host=os.environ.get("REDIS_HOST", "localhost"), 
                     port=os.environ.get("REDIS_PORT", 6379),
@@ -22,17 +22,24 @@ def increment_str(s):
 	new_s += 'A' * num_replacements
 	return new_s
 
-def create_seat_map(event_name, rows, seats_per_row):
+def create_event(event_name, rows, seats_per_row):
+	redis.hset("events:" + event_name, "rows", rows)
+	redis.hset("events:" + event_name, "seats_per_row", seats_per_row)
 	row_name = "A"
 	for i in range(rows):
-		filled_seat_map = bin(int(math.pow(2,seats_per_row))-1)
-		redis.set("events:" + event_name + ":" + row_name, filled_seat_map)
+		filled_seat_map = int(math.pow(2,seats_per_row))-1
+		redis.set("events:" + event_name + ":" + row_name, struct.pack('l', filled_seat_map))
 		row_name = increment_str(row_name)
 
-def print_seat_map(event_name):
+def get_event_seat_row(event_name, row_name):
+	print event_name, row_name
+	return struct.unpack('l', redis.get("events:" + event_name + ":" + row_name))[0]
+
+def print_event_seat_map(event_name):
 	rows = redis.keys("events:" + event_name + ":*")
 	for row in rows:
-		seat_map = int(redis.get(row),2)
+		(_, row_name) = row.rsplit(":",1)
+		seat_map = get_event_seat_row(event_name, row_name)
 		print("Row {}:").format(row),
 		for i in range(seat_map.bit_length()):
 			if ((i % 10 ) == 0):
@@ -42,12 +49,11 @@ def print_seat_map(event_name):
 
 # Part One - Create the event map
 event = "Judo"
-create_seat_map(event, 2, 20)
-print_seat_map(event)
-
+create_event(event, 2, 20)
+print_event_seat_map(event)
 
 def check_availbale(seat_map, seats_required, first_seat=-1):
-	blocks = []
+	seats = []
 	if ( first_seat != -1 ):
 		end_seat = first_seat + seats_required -1
 	else:
@@ -55,72 +61,85 @@ def check_availbale(seat_map, seats_required, first_seat=-1):
 	required_block = int(math.pow(2,seats_required))-1
 	for i in range(1, end_seat):
 		if ( (seat_map & required_block) == required_block ):
-			blocks.append( {'first_seat': i, 'last_seat': i + seats_required -1} )
+			seats.append( {'first_seat': i, 'last_seat': i + seats_required -1} )
 		required_block = required_block << 1
-	return blocks
+	return seats
 
 def find_seat_selection(event_name, seats_required):
 	# Get all the seat rows
-	blocks = []
+	seats = []
 	rows = redis.keys("events:" + event_name + ":*")
 	for row in rows:
-		seat_map = int(redis.get(row),2)
+		(_, row_name) = row.rsplit(":",1)
+		seat_map = get_event_seat_row(event_name, row_name)
 		row_blocks = check_availbale(seat_map, seats_required)
 		if (len(row_blocks) > 0):
-			blocks.append( {'row': row, 'blocks': row_blocks } )
-	return blocks
+			seats.append( {'event': event_name, 'row': row_name, 'available': row_blocks } )
+	return seats
 
-def print_availbale_blocks(blocks):
-	for block in blocks:
-		current_block = block['blocks']
-		for i in range(len(current_block)):
-			print " Row: {}, Start {}, End {}".format(block['row'],current_block[i]['first_seat'], current_block[i]['last_seat'],)
+def print_seat_availbailiy(seats):
+	for row in seats:
+		print "Event: {}".format(row['event'])
+		current_row = row['available']
+		for i in range(len(current_row)):
+			print "-Row: {}, Start {}, End {}".format(row['row'],current_row[i]['first_seat'], current_row[i]['last_seat'],)
 
-available_blocks = find_seat_selection(event, 2)
-print_availbale_blocks(available_blocks)
+available_seats = find_seat_selection(event, 2)
+print_seat_availbailiy(available_seats)
 
 # Part Two - reserve seats
+def set_seat_map(event_name, row_name, map):
+	redis.set("events:" + event_name + ":" + row_name, struct.pack('l', map))
 
-def set_seat_map(event_name, row, map):
-	redis.set("events:" + event_name + ":" + row, map)
+def generate_order_id():
+  return ''.join(random.choice(string.ascii_uppercase + string.digits) \
+    for _ in range(6))
 
-def reservation(event_name, row, first_seat, last_seat):
+def reservation(event_name, row_name, first_seat, last_seat):
 	reserved = False
+	redis.watch("events:" + event_name + ":" + row_name)
+	p = redis.pipeline()
 	try:
-		redis.watch("events:" + event_name + ":" + row)
-		p = redis.pipeline()
-		seat_map = int(redis.get("events:" + event_name + ":" + row),2)
-		block = check_availbale(seat_map, last_seat - first_seat + 1, first_seat)
-		if ( len(block) > 0 ):
-			for i in range(first_seat, last_seat+1):
-				seat_map = seat_map - int(math.pow(2,i-1))
-			p.set("events:" + event_name + ":" + row, bin(seat_map))
+		order_id = generate_order_id()
+		required_block = int(math.pow(2,last_seat - first_seat + 1))-1 << (first_seat-1)
+		for i in range(last_seat - first_seat +1):
+			p.setnx("orders:" + event_name + ":" + row_name + ":" + str(i), True)
+			p.expire("orders:" + event_name + ":" + row_name + ":" + str(i), 5)
+		p.psetex("orders:" + event_name + ":" + row_name + ":" + order_id, 5000, struct.pack('l',required_block))
+		seat_map = get_event_seat_row(event_name, row_name)
+		seats = check_availbale(seat_map, last_seat - first_seat + 1, first_seat)
+		if ( len(seats) > 0 ):
+			p.bitop("XOR", "events:" + event_name + ":" + row_name, 
+				             "events:" + event_name + ":" + row_name, 
+				             "orders:" + event_name + ":" + row_name + ":" + order_id)
 			p.execute()
 			reserved = True
 	except WatchError:
-		print "Write Conflict: {}".format("events:" + event_name + ":" + row)
+		print "Write Conflict: {}".format("events:" + event_name + ":" + row_name)
 	finally:
 		p.reset()
 	return reserved
 
 event="Fencing"
-create_seat_map(event, 1, 10)
+create_event(event, 1, 10)
 # Seat 4 (the 8th bit) is already sold. We calc this as (2^(seats)-1) - bit_number_of_seat, e.g. 1023 - 8
-set_seat_map(event, "A", bin(1023-8))
-print_seat_map(event)
-blocks = find_seat_selection(event, 2)
-print_availbale_blocks(blocks)
+set_seat_map(event, "A", 1023-8)
+print_event_seat_map(event)
+seats = find_seat_selection(event, 2)
+print_seat_availbailiy(seats)
 # Just choose the first found
-made_reservation = reservation(event, "A", blocks[0]['blocks'][0]['first_seat'], blocks[0]['blocks'][0]['last_seat'])
-print "Made restervation? {}".format(made_reservation)
-print_seat_map(event)
+made_reservation = reservation(event, "A", seats[0]['available'][0]['first_seat'], seats[0]['available'][0]['last_seat'])
+print "Made reservation? {}".format(made_reservation)
+print_event_seat_map(event)
 
-blocks = find_seat_selection(event, 5)
-print_availbale_blocks(blocks)
+seats = find_seat_selection(event, 5)
+print_seat_availbailiy(seats)
 # Just choose the first found
-made_reservation = reservation(event, "A", blocks[0]['blocks'][0]['first_seat'], blocks[0]['blocks'][0]['last_seat'])
-print "Made restervation? {}".format(made_reservation)
-print_seat_map(event)
+made_reservation = reservation(event, "A", seats[0]['available'][0]['first_seat'], seats[0]['available'][0]['last_seat'])
+print "Made reservation? {}".format(made_reservation)
+print_event_seat_map(event)
+
+
 
 
 
