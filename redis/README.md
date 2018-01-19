@@ -42,10 +42,10 @@ If all we need to record is the current total, then this may be appropriate. Per
 127.0.0.1:6379> zadd cookies incr 1 a3fWa
 "1"
 127.0.0.1:6379> zrangebyscore cookies -inf +inf withscores
-1) "abc123"
-2) "0"
-3) "a3fWa"
-4) "1"
+ 1) "abc123"
+ 2) "0"
+ 3) "a3fWa"
+ 4) "1"
 ```
 
 
@@ -57,13 +57,13 @@ OK
 127.0.0.1:6379> hincrby a3fWa count 1
 (integer) 1
 127.0.0.1:6379> hgetall a3fWa
-1) "last_seen"
-2) "1516384712.976586"
-3) "count"
-4) "1"
+ 1) "last_seen"
+ 2) "1516384712.976586"
+ 3) "count"
+ 4) "1"
 ```
 
-The Hash datatype provides the ability to manage multiple fields in a flat structure, but we have now lost the ability to get an overall ordered list of the total hits for each cookie. So what's the best solution. Well, the answer is "it depends", and as we will see in this series of articles you will combine a number of the data structures in order to solve a given problem and set of use cases. Don't get frustrated that this may not always seem obvious, some experimentation is required as you get familiar with Redis!
+The [Hash](https://redis.io/commands#hash) datatype provides the ability to manage multiple fields in a flat structure, but we have now lost the ability to get an overall ordered list of the total hits for each cookie. So what's the best solution. Well, the answer is "it depends", and as we will see in this series of articles you will combine a number of the data structures in order to solve a given problem and set of use cases. Don't get frustrated that this may not always seem obvious, some experimentation is required as you get familiar with Redis!
 
 ## Keys
 A Redis key is the fundamental building block of data structures within Redis. The key is a unique identifier for the data structure it encapsulates or points at. Redis has no explicit key or namespacing, keys are held in a flat namespace. Its customary to use a dotted or colon delineation for the parts of the key, for example:
