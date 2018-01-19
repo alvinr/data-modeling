@@ -23,8 +23,6 @@ def increment_str(s):
 	return new_s
 
 def create_event(event_name, rows, seats_per_row):
-	# redis.hset("events:" + event_name, "rows", rows)
-	# redis.hset("events:" + event_name, "seats_per_row", seats_per_row)
 	row_name = "A"
 	for i in range(rows):
 		filled_seat_map = int(math.pow(2,seats_per_row))-1
@@ -69,11 +67,15 @@ def find_seat_selection(event_name, seats_required):
 	seats = []
 	rows = redis.keys("events:" + event_name + ":*")
 	for row in rows:
-		(_, row_name) = row.rsplit(":",1)
-		seat_map = get_event_seat_row(event_name, row_name)
-		row_blocks = get_availbale(seat_map, seats_required)
-		if (len(row_blocks) > 0):
-			seats.append( {'event': event_name, 'row': row_name, 'available': row_blocks } )
+		# Find if there are enough seats in the row, before checking if they are contiguous
+		if ( redis.bitcount(row) >= seats_required ):
+			(_, row_name) = row.rsplit(":",1)
+			seat_map = get_event_seat_row(event_name, row_name)
+			row_blocks = get_availbale(seat_map, seats_required)
+			if (len(row_blocks) > 0):
+				seats.append( {'event': event_name, 'row': row_name, 'available': row_blocks } )
+		else:
+			print "Row '{}' does not have enough seats".format(row)
 	return seats
 
 def print_seat_availbailiy(seats):
@@ -83,13 +85,19 @@ def print_seat_availbailiy(seats):
 		for i in range(len(current_row)):
 			print "-Row: {}, Start {}, End {}".format(row['row'],current_row[i]['first_seat'], current_row[i]['last_seat'],)
 
-available_seats = find_seat_selection(event, 2)
-print_seat_availbailiy(available_seats)
-
-# Part Two - reserve seats
 def set_seat_map(event_name, row_name, map):
 	redis.set("events:" + event_name + ":" + row_name, struct.pack('l', map))
 
+available_seats = find_seat_selection(event, 2)
+print_seat_availbailiy(available_seats)
+
+# Check that we skip rows
+set_seat_map(event, "A", math.pow(2, 20) - 31)
+print_event_seat_map(event)
+available_seats = find_seat_selection(event, 17)
+print_seat_availbailiy(available_seats)
+
+# Part Two - reserve seats
 def generate_order_id():
   return ''.join(random.choice(string.ascii_uppercase + string.digits) \
     for _ in range(6))
@@ -114,14 +122,14 @@ def reservation(event_name, row_name, first_seat, last_seat):
 			for i in range(first_seat, last_seat+1):
 				# Reserve individual seat, raise exception is already reserved
 				if (redis.set("orders:" + event_name + ":" + row_name + ":" + str(i), 
-					            True,
-					            px=5000, nx=True) != True):
+					          True,
+					          px=5000, nx=True) != True):
 					raise SeatTaken(i, "orders:" + event_name + ":" + row_name + ":" + str(i))
 			order_id = generate_order_id()
 			required_block = int(math.pow(2,last_seat - first_seat + 1))-1 << (first_seat-1)
 			redis.set("orders:" + event_name + ":" + row_name + ":" + order_id, 
-				        struct.pack('l',required_block),
-				        px=5000, nx=True)
+				      struct.pack('l',required_block),
+				      px=5000, nx=True)
 			p.bitop("XOR", "events:" + event_name + ":" + row_name, 
 				           "events:" + event_name + ":" + row_name, 
 				           "orders:" + event_name + ":" + row_name + ":" + order_id)

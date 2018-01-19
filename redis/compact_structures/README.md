@@ -109,11 +109,15 @@ def find_seat_selection(event_name, seats_required):
 	seats = []
 	rows = redis.keys("events:" + event_name + ":*")
 	for row in rows:
-		(_, row_name) = row.rsplit(":",1)
-		seat_map = get_event_seat_row(event_name, row_name)
-		row_blocks = get_availbale(seat_map, seats_required)
-		if (len(row_blocks) > 0):
-			seats.append( {'event': event_name, 'row': row_name, 'available': row_blocks } )
+		# Find if there are enough seats in the row, before checking if they are contiguous
+		if ( redis.bitcount(row) >= seats_required ):
+			(_, row_name) = row.rsplit(":",1)
+			seat_map = get_event_seat_row(event_name, row_name)
+			row_blocks = get_availbale(seat_map, seats_required)
+			if (len(row_blocks) > 0):
+				seats.append( {'event': event_name, 'row': row_name, 'available': row_blocks } )
+		else:
+			print "Row '{}' does not have enough seats".format(row)
 	return seats
 
 def print_seat_availbailiy(seats):
