@@ -29,7 +29,7 @@ Redis has a complete set of data structures that allow modeling of complex domai
 127.0.0.1:6379> set a3fWa 0
 OK
 127.0.0.1:6379> incr a3fWa
-(integer) 1
+ (integer) 1
 127.0.0.1:6379> get a3fWa
 "1"
 ```
@@ -38,7 +38,7 @@ If all we need to record is the current total, then this may be appropriate. Per
 
 ```
 127.0.0.1:6379> zadd cookies 0 abc123
-(integer) 1
+ (integer) 1
 127.0.0.1:6379> zadd cookies incr 1 a3fWa
 "1"
 127.0.0.1:6379> zrangebyscore cookies -inf +inf withscores
@@ -55,7 +55,7 @@ But perhaps there is other meta-data we need to record, for example the timestam
 127.0.0.1:6379> hmset a3fWa last_seen 1516384712.976586
 OK
 127.0.0.1:6379> hincrby a3fWa count 1
-(integer) 1
+ (integer) 1
 127.0.0.1:6379> hgetall a3fWa
  1) "last_seen"
  2) "1516384712.976586"
@@ -170,7 +170,7 @@ assignments:
 
 As you can see, we have now added or denormalized more that just the Key of the ```employee``` into the ```department```. We can create a key that expresses the hierarchy of the data, for example, ```HQ:Staff:Anne``` which then contains a [hash map](https://redis.io/commands#hash) of the denormlaized attributes. All the data required has been denormalized into this object, this removes the need for a second query. But this does not come for free. There is extra storage required, because we are now storing the same data (e.g. ```job_title```) multiple times. If "Anne" now gets promoted to a "VP of Sales" , then we potentially have to make multiple updates: once to the ```employee`` record, and once to the ```department``` record that encapsulates the ```assignment```.
 
-For this use case, you can argue that perhaps you don't need to update the ```assignment```; you simply insert a new ```assignment``` into the array with the new ```job_tile``` and ```start_date```. You would probably need to update the ```employee``` record with the new ```job_title```, or simply remove the ```job_title``` from ``employee``` because the current ```title``` is on the ```assignment```.
+For this use case, you can argue that perhaps you don't need to update the ```assignment```; you simply insert a new ```assignment``` into the array with the new ```job_tile``` and ```start_date```. You would probably need to update the ```employee``` record with the new ```job_title```, or simply remove the ```job_title``` from ```employee``` because the current ```title``` is on the ```assignment```.
 
 As you can see, there are many choices, depending on your data requirements and use case.
 
