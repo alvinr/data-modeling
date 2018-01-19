@@ -105,7 +105,7 @@ Running the code, you will see the following output:
 {'available': '5', 'price': '9', 'capacity': '10'}
 ```
 
-This solution does satisfy the requirement to track purchases. However, the reality of purchasing tickets, means that there are other asyncronous processes that have to occur during the flow, for example getting a credit card authorization. This means we need to reserve the stock and back out the reservation if the purchase flow fails in any way.
+This solution does satisfy the requirement to track purchases. However, the reality of purchasing tickets, means that there are other asynchronous processes that have to occur during the flow, for example getting a credit card authorization. This means we need to reserve the stock and back out the reservation if the purchase flow fails in any way.
 
 ## Reserve Stock
 Our initial requirements stated that we needed to "hold" or reserve the tickets during the booking process. Just like an airline booking, it would be a poor user experience to get to the end of the payment instructions, just to be told that your tickets have been sold to somebody else. Therefore, we need to include a list of reservations on the event record to keep track of these in­-flight transactions:
@@ -164,7 +164,7 @@ def reserve(user, event_name, qty):
     backout_reservation(user, event_name, qty)
 ```
 
-The ```backout_reservation``` function take care of adjusting the ```availbale``` tickets and removing the reservation details.
+The ```backout_reservation``` function take care of adjusting the ```available``` tickets and removing the reservation details.
 
 ```python
 def backout_reservation(user, event_name, qty):
@@ -347,7 +347,7 @@ def reserve_with_pending(user, event_name, qty):
     backout_reservation(user, event_name, qty)
 ```
 
-Now we can have a sweeper process that adds the purchase to the ```invoices``` for the user and the ```sales``` for the event, by poping the next item from the ```pending``` list.
+Now we can have a sweeper process that adds the purchase to the ```invoices``` for the user and the ```sales``` for the event, by popping the next item from the ```pending``` list.
 
 ```python
 def post_purchases(event_name):
@@ -366,9 +366,9 @@ def post_purchases(event_name):
     p.execute()
 ```
 
-Since the Sales and Marketing teams also want to know the total sales and availbale tickets for the event, we maintain two counters in the hash ```sales_summary```. It should be noted, that simply popping the ```pending``` queue could result in the loss of this event if a crash or other event was to occur. As we saw in the [state machine](../state_mchines/README.md) article, there are patterns to deal with this problem, so will omit here for sake of clarity.
+Since the Sales and Marketing teams also want to know the total sales and available tickets for the event, we maintain two counters in the hash ```sales_summary```. It should be noted, that simply popping the ```pending``` queue could result in the loss of this event if a crash or other event was to occur. As we saw in the [state machine](../state_mchines/README.md) article, there are patterns to deal with this problem, so will omit here for sake of clarity.
 
-As always, the Sales and Marketing team came back with a requirement to know on an hour-by-hour basis, the total tickets sold. We can use the power of redis [bitmaps](https://redis.io/topics/data-types-intro#bitmaps) to store and manipulate 24 counters that represent each hour. We use the [BITFIELD](https://redis.io/commands/bitfield) to manipulate each counter. This provides a compact way to store and access the sturcture to maintain the totals and report the current sales.
+As always, the Sales and Marketing team came back with a requirement to know on an hour-by-hour basis, the total tickets sold. We can use the power of Redis [bitmaps](https://redis.io/topics/data-types-intro#bitmaps) to store and manipulate 24 counters that represent each hour. We use the [BITFIELD](https://redis.io/commands/bitfield) to manipulate each counter. This provides a compact way to store and access the structure to maintain the totals and report the current sales.
 
 We can now create a new events and purchases:
 
@@ -460,6 +460,6 @@ Invoices for Amy: set(['9VJW3N', '2P3C8S'])
 ```
 
 ## Summary
-As we have seen, dealing with multi­step transactions is simple. Careful consideration needs to be made around transaction boundaries ­- remember that value smay be morphed by another process between reading and modifying a value. This means you need to approach your domain problem with this in mind, ensuring that multi­step transaction are replayable or you have adequate ways to compensate on failure.
+As we have seen, dealing with multi­step transactions is simple. Careful consideration needs to be made around transaction boundaries ­- remember that values may be morphed by another process between reading and modifying a value. This means you need to approach your domain problem with this in mind, ensuring that multi­step transaction are re-playable or you have adequate ways to compensate on failure.
 
 In the next article, we will talk about the [compact structures](../compact_structures/README.md), and how we can extend our inventory control system for the Olympics to handle seat allocations and reservations.

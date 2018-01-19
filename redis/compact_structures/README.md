@@ -75,7 +75,7 @@ create_event(event, 2, 20)
 print_event_seat_map(event)
 ```
 
-In the function ```create_event``` we set the key for the seating row in the event, but in this case we are setting a binary encoded structure filled with one's to represent each seat that is availbale. So why don't we simply just store the numeric value? Well, the answers is that each language driver will pickle and store the value in a string representation in a meaningful to that language. If we are just using Python or any other specifc language, then that woudl be find. However, if we want to use any of the in-built Redis operators, then we need to store the value in a way that Redis can manipulate, so this is why we use the ```struct.pack``` method to pack the data correctly. This will vary by language on exactly how you do this, but the key point is that you need to store the data in a way that Redis can manipulate.
+In the function ```create_event``` we set the key for the seating row in the event, but in this case we are setting a binary encoded structure filled with one's to represent each seat that is available. So why don't we simply just store the numeric value? Well, the answers is that each language driver will pickle and store the value in a string representation in a meaningful to that language. If we are just using Python or any other specific language, then that would be find. However, if we want to use any of the in-built Redis operators, then we need to store the value in a way that Redis can manipulate, so this is why we use the ```struct.pack``` method to pack the data correctly. This will vary by language on exactly how you do this, but the key point is that you need to store the data in a way that Redis can manipulate.
 
 If you run the code you will see:
 
@@ -127,7 +127,7 @@ available_seats = find_seat_selection(event, 2)
 print_seat_availbailiy(available_seats)
 ```
 
-There is nothing specifically Redis here, but inside ```get_availbale``` we use a bit mask of the requested seats to compare the bit field of availbaility. If we don't find a match, we shift the bits by one and continue to check. This implemention is pretty dumb and could be optimized a number of ways, but you will see the basic idea. We build a data structure for the resulting matches that we can use elsewhere in the code - rather than constantly manipulating bit fields!
+There is nothing specifically Redis here, but inside ```get_availbale``` we use a bit mask of the requested seats to compare the bit field of availability. If we don't find a match, we shift the bits by one and continue to check. This implementation is pretty dumb and could be optimized a number of ways, but you will see the basic idea. We build a data structure for the resulting matches that we can use elsewhere in the code - rather than constantly manipulating bit fields!
 
 ## Seat Reservation
 So once we have found the blocks of seats that meet the customers requests, we can assume that the customer then selects which they want. For that selection we now need to reserve the seats to make the booking. In a similar way to [inventory control](../inventory/README.md) we need to ensure that we reserve all the seats before we complete the booking. Here's the code.
@@ -182,11 +182,11 @@ def reservation(event_name, row_name, first_seat, last_seat):
 	return reserved
 ```
 
-In the ```reservation``` function we first reserver each of the seats inside the loop. We do this by creating a key, made up of the Event, Row and Seat Number. We pass ```nx=True``` which indicates that the key must not exist. If it does then we thrown a user defined execition ```SeatTaken```. We also set ```px=5000```, which just specifies that they key expires after 5000 miliseconds. In essance, each key acts as a time expired latch. We have to get all latches, one for each seat, in order to compete the order.
+In the ```reservation``` function we first reserver each of the seats inside the loop. We do this by creating a key, made up of the Event, Row and Seat Number. We pass ```nx=True``` which indicates that the key must not exist. If it does then we thrown a user defined exception ```SeatTaken```. We also set ```px=5000```, which just specifies that they key expires after 5000 milliseconds. In essence, each key acts as a time expired latch. We have to get all latches, one for each seat, in order to compete the order.
 
-After all the seacts are reserved, we then create another time expired key for the ```order```, which contains the seats we reserved. This is then used to update the availbale inventory using the [BITOP]{https://redis.io/commands/bitop} operator. What we are doing is performing an exclusive-OR operation on the seats reserved and the current seat availbaility. This will simply flip the bits for those seats we have just reserved. We put the output back into the same key.
+After all the seats are reserved, we then create another time expired key for the ```order```, which contains the seats we reserved. This is then used to update the available inventory using the [BITOP]{https://redis.io/commands/bitop} operator. What we are doing is performing an exclusive-OR operation on the seats reserved and the current seat availability. This will simply flip the bits for those seats we have just reserved. We put the output back into the same key.
 
-In a multi-step process like this, other clients or customer can be reserving tickets. As we have seen before, we use the [compare and set](https://redis.io/topics/transactions#optimistic-locking-using-check-and-set) meachanism to abort the transation if another process makes a change. In this case, we have created a ```watch``` on the key that represents the row of the event, which contains the seat map. If another process updates the seat map, then this transaction will fail. That way we can put some guarantees on the consistency and integrity of the data we are changing.
+In a multi-step process like this, other clients or customer can be reserving tickets. As we have seen before, we use the [compare and set](https://redis.io/topics/transactions#optimistic-locking-using-check-and-set) mechanism to abort the transaction if another process makes a change. In this case, we have created a ```watch``` on the key that represents the row of the event, which contains the seat map. If another process updates the seat map, then this transaction will fail. That way we can put some guarantees on the consistency and integrity of the data we are changing.
 
 Now we can invoke the code to reserve the seats
 ```python
@@ -229,7 +229,7 @@ Made reservation? True
 Row events:Fencing:A: | 0 0 1 0 1 1 1 1 1 1 |
 ```
 
-So what isn't seat #4 available? Well, we set a specific value in ```set_seat_map``` that just marked seat #4 as sold. So the algorithm that checked for availbaility excluded that seat. After the reservation is complete, you can see that seats 1 & 2 are no onger availbale.
+So what isn't seat #4 available? Well, we set a specific value in ```set_seat_map``` that just marked seat #4 as sold. So the algorithm that checked for availability excluded that seat. After the reservation is complete, you can see that seats 1 & 2 are no longer available.
 
 Just to test we deal with a seat being taken from under us, we can do the following:
 ```python

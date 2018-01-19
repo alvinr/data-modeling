@@ -161,7 +161,7 @@ for m in matches:
 
 ```
 
-The function ```create_hased_lookups``` is creating a hash (using [RIPEMD­160](https://en.wikipedia.org/wiki/RIPEMD) hash - a colision free hashing algorithm used by Bitcoin and others) of the compound values we want to query for, thus providing a compact and reproducible value to query against. We want to deterministic hash that minimizes collision, RIPEMD­160 is used in the Bitcoin algorithm, but we could have used SHA512 or any other popular hash. We could have used a simple concatenation of strings, but a hash avoids the problem of key size and key distribution. This allows a Primary Key lookup to be made on these compound values. Once the ```lookup``` record has been returned, we can they execute the subsequent Primary Key lookups of the ```product``` data as we have done previously.
+The function ```create_hased_lookups``` is creating a hash (using [RIPEMD­160](https://en.wikipedia.org/wiki/RIPEMD) hash - a collision free hashing algorithm used by Bitcoin and others) of the compound values we want to query for, thus providing a compact and reproducible value to query against. We want to deterministic hash that minimizes collision, RIPEMD­160 is used in the Bitcoin algorithm, but we could have used SHA512 or any other popular hash. We could have used a simple concatenation of strings, but a hash avoids the problem of key size and key distribution. This allows a Primary Key lookup to be made on these compound values. Once the ```lookup``` record has been returned, we can they execute the subsequent Primary Key lookups of the ```product``` data as we have done previously.
 
 Running the code, you will see the matching product printed:
 
@@ -176,5 +176,5 @@ Running the code, you will see the matching product printed:
 ```
 
 ## Summary
-As can be seen, faceting is a powerful pattern that enables complex query patterns to executed in an efficient way with a key­-value store. With any denormalization, there is always the cost of propagating the changes to the denormalized data. The tradeoff is always the frequency of changes versus the query flexibility that your application needs.
+As can be seen, faceting is a powerful pattern that enables complex query patterns to executed in an efficient way with a key­-value store. With any denormalization, there is always the cost of propagating the changes to the denormalized data. The trade-off is always the frequency of changes versus the query flexibility that your application needs.
 In the next article, we will discuss how to model queues and state machines [queues and state machines](../state_machines/README.md).
