@@ -28,8 +28,10 @@ Redis has a complete set of data structures that allow modeling of complex domai
 ```
 127.0.0.1:6379> set a3fWa 0
 OK
+
 127.0.0.1:6379> incr a3fWa
  (integer) 1
+
 127.0.0.1:6379> get a3fWa
 "1"
 ```
@@ -39,8 +41,10 @@ If all we need to record is the current total, then this may be appropriate. Per
 ```
 127.0.0.1:6379> zadd cookies 0 abc123
  (integer) 1
+
 127.0.0.1:6379> zadd cookies incr 1 a3fWa
 "1"
+
 127.0.0.1:6379> zrangebyscore cookies -inf +inf withscores
  1) "abc123"
  2) "0"
@@ -54,8 +58,10 @@ But perhaps there is other meta-data we need to record, for example the timestam
 ```
 127.0.0.1:6379> hmset a3fWa last_seen 1516384712.976586
 OK
+
 127.0.0.1:6379> hincrby a3fWa count 1
  (integer) 1
+
 127.0.0.1:6379> hgetall a3fWa
  1) "last_seen"
  2) "1516384712.976586"
