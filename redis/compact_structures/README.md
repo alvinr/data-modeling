@@ -5,7 +5,7 @@ In the [last](../inventory/README.md) article we showed how to storage and manip
 * Reserve the seats they requested
 
 ## Bitmapped structures
-Redis provides [bitmaped structures](https://redis.io/topics/data-types-intro#bitmaps) that can be used for a variety of uses. As we saw in the previous article on [inventory control](../inventory/README.md), we used a bit structure to store a histogram of the total tickets sales by hour. We will adapt model that for this problem, since we can use a single bit to describe if a given seat has been sold. The JSON for the schema looks like:
+Redis provides [bitmaped structures](https://redis.io/topics/data-types-intro#bitmaps) that can be used for a variety of uses. As we saw in the previous article on [inventory control](../inventory/README.md), we used a bit structure to store a histogram of the total tickets sales by hour. We will adapt model that for this problem, since we can use a single bit to describe if a given seat has been sold. While bitmap structures are not a new thing, in context of memory usage and ability to store large amounts of information, they provide some significant advantages. The JSON schema for the seat maps could look like:
 
 ```
 events: "Judo"
@@ -18,7 +18,7 @@ events: "Judo"
   }
 ```
 
-We use the binary string to represent the state of each seat in the given row, for example, only seat #4 has been sold in Row "A", represented by the Zero value.
+We use the binary string to represent the state of each seat in the given row, for example, only seat #4 has been sold in Row "A", represented by the Zero value. Its easy to see how seat map for a very large venue can be stored in a tiny amount of memory if we use a bitmap.
 
 Lets create the code that sets up these structures
 
@@ -75,7 +75,13 @@ create_event(event, 2, 20)
 print_event_seat_map(event)
 ```
 
-In the function ```create_event``` we set the key for the seating row in the event, but in this case we are setting a binary encoded structure filled with one's to represent each seat that is available. So why don't we simply just store the numeric value? Well, the answers is that each language driver will pickle and store the value in a string representation in a meaningful to that language. If we are just using Python or any other specific language, then that would be find. However, if we want to use any of the in-built Redis operators, then we need to store the value in a way that Redis can manipulate, so this is why we use the ```struct.pack``` method to pack the data correctly. This will vary by language on exactly how you do this, but the key point is that you need to store the data in a way that Redis can manipulate.
+In the function ```create_event``` we set the key for the seating row in the event, but in this case we are setting a binary encoded structure filled with one's to represent each seat that is available. So why don't we simply just store the numeric value? Well, the answers is that each language driver will pickle and store the value in a string representation in a meaningful to that language. If we are just using Python or any other specific language, then that would be find. However, if we want to use any of the in-built Redis operators, then we need to store the value in a way that Redis can manipulate.
+
+```python
+redis.set("events:" + event_name + ":" + row_name, struct.pack('l', filled_seat_map))
+```
+
+This is why we use the ```struct.pack``` method to pack the data correctly for Redis. This will vary by language on exactly how you do this, but the key point is that you need to store the data in a way that Redis can manipulate.
 
 If you run the code you will see:
 
@@ -133,6 +139,8 @@ print_seat_availbailiy(available_seats)
 
 There is nothing specifically Redis here, but inside ```get_availbale``` we use a bit mask of the requested seats to compare the bit field of availability. If we don't find a match, we shift the bits by one and continue to check. This implementation is pretty dumb and could be optimized a number of ways, but you will see the basic idea. We build a data structure for the resulting matches that we can use elsewhere in the code - rather than constantly manipulating bit fields!
 
+In ```find_seat_selection``` there is a minor optimization, using the Redis operator [```bitcount```](https://redis.io/commands/bitcount) operator, which returns the number of bits set. This allows a simple check to be made if the row contains enough seats to satisfy the request, before we check if there are enough continuous seats in the row.
+
 ## Seat Reservation
 So once we have found the blocks of seats that meet the customers requests, we can assume that the customer then selects which they want. For that selection we now need to reserve the seats to make the booking. In a similar way to [inventory control](../inventory/README.md) we need to ensure that we reserve all the seats before we complete the booking. Here's the code.
 
@@ -186,7 +194,13 @@ def reservation(event_name, row_name, first_seat, last_seat):
 	return reserved
 ```
 
-In the ```reservation``` function we first reserver each of the seats inside the loop. We do this by creating a key, made up of the Event, Row and Seat Number. We pass ```nx=True``` which indicates that the key must not exist. If it does then we thrown a user defined exception ```SeatTaken```. We also set ```px=5000```, which just specifies that they key expires after 5000 milliseconds. In essence, each key acts as a time expired latch. We have to get all latches, one for each seat, in order to compete the order.
+In the ```reservation``` function we first reserve each of the seats inside the loop. We do this by creating a key, made up of the Event, Row and Seat Number.
+
+```python
+redis.set("orders:" + event_name + ":" + row_name + ":" + str(i), True, px=5000, nx=True)
+```
+
+We pass ```nx=True``` which indicates that the key must not exist. If it does then we thrown a user defined exception ```SeatTaken```. We also set ```px=5000```, which just specifies that they key expires after 5000 milliseconds. In essence, each key that is set acts as a time expired latch. We have to get all latches, one for each seat, in order to compete the order. This helps to prevent another customer reserving the same seat in another order flow.
 
 After all the seats are reserved, we then create another time expired key for the ```order```, which contains the seats we reserved. This is then used to update the available inventory using the [BITOP]{https://redis.io/commands/bitop} operator. What we are doing is performing an exclusive-OR operation on the seats reserved and the current seat availability. This will simply flip the bits for those seats we have just reserved. We put the output back into the same key.
 
