@@ -10,7 +10,7 @@ Redis provides [bitmaped structures](https://redis.io/topics/data-types-intro#bi
 ```
 events: "Judo"
   {
-  	'availbaility':
+  	'availability':
   	[
   		{ 'row': "A", 'seat_map': "\b1110111111" },
   		{ 'row': "B", 'seat_map': "\b1111111111" },
@@ -163,7 +163,6 @@ class SeatTaken(Error):
 
 def reservation(event_name, row_name, first_seat, last_seat):
 	reserved = False
-	redis.watch("events:" + event_name + ":" + row_name)
 	p = redis.pipeline()
 	try:
 		seat_map = get_event_seat_row(event_name, row_name)
@@ -172,21 +171,19 @@ def reservation(event_name, row_name, first_seat, last_seat):
 			for i in range(first_seat, last_seat+1):
 				# Reserve individual seat, raise exception is already reserved
 				if (redis.set("orders:" + event_name + ":" + row_name + ":" + str(i), 
-					            True,
-					            px=5000, nx=True) != True):
+					          True,
+					          px=5000, nx=True) != True):
 					raise SeatTaken(i, "orders:" + event_name + ":" + row_name + ":" + str(i))
 			order_id = generate_order_id()
 			required_block = int(math.pow(2,last_seat - first_seat + 1))-1 << (first_seat-1)
-			redis.set("orders:" + event_name + ":" + row_name + ":" + order_id, 
-				        struct.pack('l',required_block),
-				        px=5000, nx=True)
+			p.set("orders:" + event_name + ":" + row_name + ":" + order_id, 
+				      struct.pack('l',required_block),
+				      px=5000, nx=True)
 			p.bitop("XOR", "events:" + event_name + ":" + row_name, 
 				           "events:" + event_name + ":" + row_name, 
 				           "orders:" + event_name + ":" + row_name + ":" + order_id)
 			p.execute()
 			reserved = True
-	except WatchError:
-		print "Write Conflict: {}".format("events:" + event_name + ":" + row_name)
 	except SeatTaken as error:
 		print "Seat Taken/{}".format(error.message)
 	finally:
@@ -200,9 +197,9 @@ In the ```reservation``` function we first reserve each of the seats inside the 
 redis.set("orders:" + event_name + ":" + row_name + ":" + str(i), True, px=5000, nx=True)
 ```
 
-We pass ```nx=True``` which indicates that the key must not exist. If it does then we thrown a user defined exception ```SeatTaken```. We also set ```px=5000```, which just specifies that they key expires after 5000 milliseconds. In essence, each key that is set acts as a time expired latch. We have to get all latches, one for each seat, in order to compete the order. This helps to prevent another customer reserving the same seat in another order flow.
+We pass ```nx=True``` which indicates that the key must not exist. If it does then we thrown a user defined exception ```SeatTaken```. We also set ```px=5000```, which just specifies that they key expires after 5000 milliseconds. In essence, each key that is set acts as a time expired latch. We have to get all latches, one for each seat, in order to compete the order. This helps to prevent another customer reserving the same seat in another order flow, but also does not block another customer reserving different seats.
 
-After all the seats are reserved, we then create another time expired key for the ```order```, which contains the seats we reserved. This is then used to update the available inventory using the [BITOP]{https://redis.io/commands/bitop} operator. What we are doing is performing an exclusive-OR operation on the seats reserved and the current seat availability. This will simply flip the bits for those seats we have just reserved. We put the output back into the same key.
+After all the seats are reserved, we then create another time expired key for the ```order```, which contains the seats we reserved. This is then used to update the available inventory using the [BITOP]{https://redis.io/commands/bitop} operator. What we are doing is performing an exclusive-OR operation on the seats reserved and the current seat availability. This will simply flip the bits for those seats we have just reserved. We put the output back into the same key. We don't not need to have a [watch](https://redis.io/commands/watch) setup to check if the ```event``` is has changed during the reservation process. Why? We have allocated each seat with our time based latches, and then we XOR the seats we have reserved, thus allowing other concurrent transactions to take place.
 
 In a multi-step process like this, other clients or customer can be reserving tickets. As we have seen before, we use the [compare and set](https://redis.io/topics/transactions#optimistic-locking-using-check-and-set) mechanism to abort the transaction if another process makes a change. In this case, we have created a ```watch``` on the key that represents the row of the event, which contains the seat map. If another process updates the seat map, then this transaction will fail. That way we can put some guarantees on the consistency and integrity of the data we are changing.
 

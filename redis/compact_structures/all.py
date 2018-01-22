@@ -113,7 +113,6 @@ class SeatTaken(Error):
 
 def reservation(event_name, row_name, first_seat, last_seat):
 	reserved = False
-	redis.watch("events:" + event_name + ":" + row_name)
 	p = redis.pipeline()
 	try:
 		seat_map = get_event_seat_row(event_name, row_name)
@@ -127,7 +126,7 @@ def reservation(event_name, row_name, first_seat, last_seat):
 					raise SeatTaken(i, "orders:" + event_name + ":" + row_name + ":" + str(i))
 			order_id = generate_order_id()
 			required_block = int(math.pow(2,last_seat - first_seat + 1))-1 << (first_seat-1)
-			redis.set("orders:" + event_name + ":" + row_name + ":" + order_id, 
+			p.set("orders:" + event_name + ":" + row_name + ":" + order_id, 
 				      struct.pack('l',required_block),
 				      px=5000, nx=True)
 			p.bitop("XOR", "events:" + event_name + ":" + row_name, 
@@ -135,8 +134,6 @@ def reservation(event_name, row_name, first_seat, last_seat):
 				           "orders:" + event_name + ":" + row_name + ":" + order_id)
 			p.execute()
 			reserved = True
-	except WatchError:
-		print "Write Conflict: {}".format("events:" + event_name + ":" + row_name)
 	except SeatTaken as error:
 		print "Seat Taken/{}".format(error.message)
 	finally:
