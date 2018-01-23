@@ -8,43 +8,39 @@ redis = StrictRedis(host=os.environ.get("REDIS_HOST", "localhost"),
                     db=0)
 redis.flushall()
 
-def create_product(product):
+def create_event(product):
   p = redis.pipeline()
-  p.sadd("pre_assembled:" + str(product['pre_assembled']), product['sku'])
-  p.sadd("pickup_only:" + str(product['pickup_only']), product['sku'])
-  p.sadd("weight_in_kg:" + str(product['weight_in_kg']), product['sku'])
-  new_product = dict(product)
-  del new_product['sku']
-  p.hmset("products:" + product['sku'], new_product)
+  p.sadd("reserve_seating:" + str(product['reserve_seating']), product['sku'])
+  p.sadd("medal_event:" + str(product['medal_event']), product['sku'])
+  p.sadd("venue:" + str(product['venue']), product['sku'])
+  p.hmset("products:" + product['sku'], product)
   p.execute()
 
-def create_products():
-  wheelbarrow = { 'sku': "123-ABC-723",
-                  'name': "Wheelbarrow",
-                  'pre_assembled': True,
-                  'pickup_only': True,
-                  'weight_in_kg': 12,
-                  'category': ["Garden", "Tool"]
+def create_events():
+  m100m_final = { 'sku': "123-ABC-723",
+                  'name': "Men's 100m Final",
+                  'reserve_seating': True,
+                  'medal_event': True,
+                  'venue': "Olympic Stadium",
+                  'category': ["Track & Field", "Mens"]
                 }
-  pump =        { 'sku': "737-DEF-911",
-                  'name': "Bicycle Pump",
-                  'pre_assembled': True,
-                  'pickup_only': False,
-                  'weight_in_kg': 0.5,
-                  'category': ["Tool"]
+  w4x100_heat = { 'sku': "737-DEF-911",
+                  'name': "Women's 4x100m Heats",
+                  'reserve_seating': True,
+                  'medal_event': False,
+                  'venue': "Olympic Stadium",
+                  'category': ["Track & Field", "Womens"]
                 }
-  kite =        { 'sku': "320-GHI-921",
-                  'name': "Rubik's Cube",
-                  'pre_assembled': True,
-                  'pickup_only': False,
-                  'weight_in_kg': 0.25,
-                  'category': ["Toy"]
+  wjudo_qual =  { 'sku': "320-GHI-921",
+                  'name': "Womens Judo Qualifying",
+                  'reserve_seating': False,
+                  'medal_event': False,
+                  'venue': "Nippon Budokan",
+                  'category': ["Martial Arts", "Womens"]
                 }
-  create_product(wheelbarrow)
-  create_product(pump)
-  create_product(kite)
-
-
+  create_event(m100m_final)
+  create_event(w4x100_heat)
+  create_event(wjudo_qual)
 
 def match(*keys):
   m = []
@@ -55,14 +51,14 @@ def match(*keys):
   return m
 
 # Find matches based on two criteria
-create_products()
+create_events()
 
 # Find the match
-matches = match("pre_assembled:True", "pickup_only:False")
+matches = match("reserve_seating:True", "medal_event:False")
 for m in matches:
   print m  
 
-matches = match("pre_assembled:True", "pickup_only:False", "weight_in_kg:0.5")
+matches = match("reserve_seating:True", "medal_event:False", "venue:Olympic Stadium")
 for m in matches:
   print m
 
@@ -83,7 +79,7 @@ def match_hashed(lookup_key):
   return m
 
 # Find matches based on hashed criteria
-lookup_key={'pickup_only': True, 'pre_assembled': True}
+lookup_key={'reserve_seating': True, 'medal_event': True}
 create_hashed_lookups(lookup_key, ["123-ABC-723"] )
 # Find the match
 matches = match_hashed(lookup_key)
