@@ -2,13 +2,13 @@
 A common data pattern revolves around managing state and ensuring that transitions between states happen in a consistent way. This could be anything from a fulfillment process to workflows or other systems where you need to maintain state.
 
 ## Provisioning
-Let's consider a simple provisioning system (see Figure­-1); it could be a signup form for a new web site, or automatic provisioning of infrastructure, etc. In this example, let's consider setting up your new Apple TV, Amazon Fire TV or Android TV device, and using one of the applications such as "NBC Sports".
+Let's consider a simple provisioning system (see Figure­-1); it could be a signup form for a new web site, or automatic provisioning of infrastructure, etc. In this example, let's consider setting up your new Apple TV, Amazon Fire TV or Android TV device, and using one of the applications such as "Olympics 2020".
 
 ![Alt text](figure-1.png "Figure­-1: State Machine for managing relationship end transfer")
 
 **Figure­-1: State Machine for managing relationship end transfer**
 
-The first time you use the "NBC Sports" application on the device, you are presented on screen with a Activation code. You then go the provider's web site with the code, enter it and after it performs a succesful entitlement request to your cable provider, the application is activated.
+The first time you use the "Olympics 2020" application on the device, you are presented on screen with a Activation code. You then go the provider's web site with the code, enter it and after it performs a succesful entitlement request to your cable provider, the application is activated.
 
 As can be seen from the state diagram, each of these distinct steps is modeled as a state the system needs to track. Let's looks at a simple JSON representation of this schema:
 
@@ -16,9 +16,9 @@ As can be seen from the state diagram, each of these distinct steps is modeled a
 account: "ATV-123"
   { 'created_at': 1469744519
     'app': {
-      'NBCSports': { 'token': "MTOB1J", 
-                     'status': "Active", 
-                     'expires': 1514938817 }
+      'Olympics 2020': { 'token': "MTOB1J", 
+                        'status': "Active", 
+                        'expires': 1514938817 }
     }
   }
 ```
@@ -70,9 +70,9 @@ def do_activate(event):
     p.reset()
 
 device_id = "ATV-123"
-service1 = "NBCSports"
+service1 = "Olympics 2020"
 token = "MTOB1J"
-service2 = "ABC"
+service2 = "NBCSports"
 
 # Part One - Provision the device with two services
 create_account(device_id)
@@ -83,7 +83,7 @@ do_activate({'device': device_id, 'service': service2, 'token': ""})
 print redis.hgetall("accounts:" + device_id)
 ```
 
-In order to track the activation token used by each application, we create a hash structure. This allows a simple keyed access, so we can directly access the entry for "NBCSports", without the need to iterate through a list. As we can see in the ```do_activate``` function, we can directly access the correct item in the hash. Per the state diagram in Figure­-1, the activation is put in the "Waiting" state, ready for the next steps.
+In order to track the activation token used by each application, we create a hash structure. This allows a simple keyed access, so we can directly access the entry for "Olympics 2020", without the need to iterate through a list. As we can see in the ```do_activate``` function, we can directly access the correct item in the hash. Per the state diagram in Figure­-1, the activation is put in the "Waiting" state, ready for the next steps.
 
 When you run the code, you will see the following:
 
@@ -91,13 +91,11 @@ When you run the code, you will see the following:
 >>> create_account(device_id)
 >>> do_activate({'device': device_id, 'service': service1, 'token': token})
 >>> print redis.hgetall("accounts:" + device_id)
-{'app:NBCSports': 'MTOB1J', 'created_at': '1514939717', 'app:NBCSports:failed': '0', 'app:NBCSports:status': 'Waiting'}
+{'app:Olympics 2020:failed': '0', 'app:Olympics 2020:status': 'Waiting', 'created_at': '1516751715', 'app:Olympics 2020': 'MTOB1J'}
 >>> 
 >>> do_activate({'device': device_id, 'service': service2, 'token': ""})
 >>> print redis.hgetall("accounts:" + device_id)
-{'app:ABC:failed': '0', 'app:NBCSports:status': 'Waiting', 'app:NBCSports': 'MTOB1J', 'created_at': '1514939717', 'app:ABC': 'Y4285X', 'app:ABC:status': 'Waiting', 'app:NBCSports:failed': '0'}
->>> 
-
+{'app:Olympics 2020': 'MTOB1J', 'app:NBCSports:status': 'Waiting', 'app:NBCSports': 'NVTCAT', 'created_at': '1516751715', 'app:Olympics 2020:failed': '0', 'app:Olympics 2020:status': 'Waiting', 'app:NBCSports:failed': '0'}
 ```
 
 ## Avoiding Updates by Other Threads and Processes
@@ -129,8 +127,8 @@ Lets look at the code to support this entitlement flow:
 
 ```python
 def do_entitlement(event):
+  p = redis.pipeline()
   try:
-    p = redis.pipeline()
     redis.watch("accounts:" + event['device'])
     account = redis.hgetall("accounts:" + event['device'])
     if 'app:' + event['service'] in account.keys():
@@ -192,7 +190,7 @@ While the ```do_entitlement``` function shoudl probably be broken down, the code
 ```
 >>> do_entitlement({'device': device_id, 'service': service1, 'token': token})
 >>> print "service: {} is {}".format(service1, redis.hget("accounts:" + device_id, "app:" + service1 + ":status"))
-service: NBCSports is Active
+service: Olympics 2020 is Active
 ```
 
 We can also test the state transition from ```Waiting``` to ```Suspended``` when we exceed the number of attempts:
@@ -202,10 +200,10 @@ We can also test the state transition from ```Waiting``` to ```Suspended``` when
 ...   do_entitlement({'device': device_id, 'service': service2, 'token': token})
 ...   print "service: {} is {}".format(service2, redis.hget("accounts:" + device_id, "app:" + service2 + ":status"))
 ... 
-service: ABC is Waiting
-service: ABC is Waiting
-service: ABC is Waiting
-service: ABC is Suspended
+service: NBCSports is Waiting
+service: NBCSports is Waiting
+service: NBCSports is Waiting
+service: NBCSports is Suspended
 ```
 
 ## Queues
@@ -251,20 +249,20 @@ In the above example, we are going to use the ```todo``` list to track new incom
 Let's take a look at the code to support this:
 
 ```python
-def transition(queue, from_state, to_state, fn):
+def transition(queue, from_state, to_state, invoke):
   # Take the next todo and create new entries into each workflow
+  p = redis.pipeline()
   id = redis.brpoplpush("events:" + queue + ":" + from_state, "events:" + queue + ":" + from_state, 1)
   if id != None:
     try:
-      p = redis.pipeline()
       redis.watch("event_playload:" + id)
       event = redis.hgetall("event_payload:" + id)
       if event['last_step'] == from_state:
-        fn(event)
+        invoke(event)
         data = { 'ts': long(time.time()), 'last_step': to_state }
         p.hmset("event_payload:" + id, data)
         p.execute()
-        print "Executed: Q:{} ID:{} S:{} FN:{}".format(queue, id, from_state, fn.__name__)
+        print "Executed: Q:{} ID:{} S:{} FN:{}".format(queue, id, from_state, invoke.__name__)
       elif event['last_step'] == to_state:
         p.lrem("events:" + queue + ":" + from_state, 0, id)
         p.lpush("events:" + queue + ":" + to_state, id)
@@ -273,7 +271,7 @@ def transition(queue, from_state, to_state, fn):
     except WatchError:
       print "Write Conflict: {}".format("event_payload:" + id)
     finally:
-      p.reset()  
+      p.reset()
 ```
 
 The ```transition``` function handles the queues and the transition of tasks between the queues. We use [```BRPOPLPUSH```](https://redis.io/commands/brpoplpush) to form a [circular list](https://redis.io/commands/rpoplpush#pattern-circular-list), as we pop the next item we add back on the end of the list. The ```B```locking version of this function ([RPOPLPUSH](https://redis.io/commands/poplpush) is the non-blocking version) simply will wait for an item to be added to the list, or for the timeout to occur (which we set to 1 second to make testing simpler). The first time we see the ```event``` we invoke the function ```fn()``` that is passed as a parameter and update the hash on compeltion. The second time we see the ```event``` we remove it from the source list and add it to the target list, if effect transitioning the state of the ```event``` and making it ready for the next step in the process.
@@ -283,16 +281,16 @@ Each state handler is then defined in a simple wrapper function of the ```transi
 
 ```python
 def process_start(queue):
-  transition(queue, "start", "todo", do_start)
+  transition(queue, from_state="start", to_state="todo", invoke=do_start)
 
 def process_activation(queue):
-  transition(queue, "todo", "provision", do_activate)
+  transition(queue, from_state="todo", to_state="provision", invoke=do_activate)
 
 def process_entitlement(queue):
-  transition(queue, "provision", "entitlement", do_entitlement)
+  transition(queue, from_state="provision", to_state="entitlement", invoke=do_entitlement)
 
 def process_finish(queue):
-  transition(queue, "entitlement", "end", do_finish)
+  transition(queue, from_state="entitlement", to_state="end", invoke=do_finish)
 ```
 
 To complete the code for the device workflow:
@@ -345,17 +343,16 @@ When the code is run, you will see the following output
 ...   if int(redis.get("events_oustanding")) == 0:
 ...     break
 ... 
-Executed: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 S:start FN:do_start
-Transitioned: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 F:start T:todo
-Executed: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 S:todo FN:do_activate
-Transitioned: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 F:todo T:provision
-Executed: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 S:provision FN:do_entitlement
-Transitioned: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 F:provision T:entitlement
-Executed: Q:new-device ID:bd506063-20af-456f-aaea-07228b5ca648 S:entitlement FN:do_finish
+Executed: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 S:start FN:do_start
+Transitioned: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 F:start T:todo
+Executed: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 S:todo FN:do_activate
+Transitioned: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 F:todo T:provision
+Executed: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 S:provision FN:do_entitlement
+Transitioned: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 F:provision T:entitlement
+Executed: Q:new-device ID:91714146-5bb4-4c4e-aede-4d09b36f39f2 S:entitlement FN:do_finish
 
 >>> print redis.hgetall("accounts:" + device_id)
-{'app:CNN:expires': '1514999299', 'created_at': '1514999288', 'app:CNN': 'MTOB1J', 'app:CNN:status': 'Active', 'app:CNN:failed': '0'}
-
+{'app:CNN:expires': '1516752042', 'created_at': '1516752023', 'app:CNN': 'MTOB1J', 'app:CNN:status': 'Active', 'app:CNN:failed': '0'}
 ```
 ## Consideration - or what else do I need to think about?
 The above examples rely on the semantics of a single Redis server. If we consider the code in the ```transition``` function we can see commands that effect multiple keys in a single transaction:

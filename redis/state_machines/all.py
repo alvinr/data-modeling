@@ -42,9 +42,9 @@ def do_activate(event):
     p.reset()
 
 device_id = "ATV-123"
-service1 = "NBCSports"
+service1 = "Olympics 2020"
 token = "MTOB1J"
-service2 = "ABC"
+service2 = "NBCSports"
 
 # Part One - Provision the device with two services
 create_account(device_id)
@@ -109,7 +109,7 @@ def do_entitlement(event):
   finally:
     p.reset()
 
-# Entitlement will move the state for "NBCSports", if the tokens match
+# Entitlement will move the state for "2020 Olympics", if the tokens match
 do_entitlement({'device': device_id, 'service': service1, 'token': token})
 print "service: {} is {}".format(service1, redis.hget("accounts:" + device_id, "app:" + service1 + ":status"))
 
@@ -125,7 +125,7 @@ def do_start(event):
 def do_finish(event):
   redis.decr("events_oustanding")
 
-def transition(queue, from_state, to_state, fn):
+def transition(queue, from_state, to_state, invoke):
   # Take the next todo and create new entries into each workflow
   p = redis.pipeline()
   id = redis.brpoplpush("events:" + queue + ":" + from_state, "events:" + queue + ":" + from_state, 1)
@@ -134,11 +134,11 @@ def transition(queue, from_state, to_state, fn):
       redis.watch("event_playload:" + id)
       event = redis.hgetall("event_payload:" + id)
       if event['last_step'] == from_state:
-        fn(event)
+        invoke(event)
         data = { 'ts': long(time.time()), 'last_step': to_state }
         p.hmset("event_payload:" + id, data)
         p.execute()
-        print "Executed: Q:{} ID:{} S:{} FN:{}".format(queue, id, from_state, fn.__name__)
+        print "Executed: Q:{} ID:{} S:{} FN:{}".format(queue, id, from_state, invoke.__name__)
       elif event['last_step'] == to_state:
         p.lrem("events:" + queue + ":" + from_state, 0, id)
         p.lpush("events:" + queue + ":" + to_state, id)
@@ -150,16 +150,16 @@ def transition(queue, from_state, to_state, fn):
       p.reset()
 
 def process_start(queue):
-  transition(queue, "start", "todo", do_start)
+  transition(queue, from_state="start", to_state="todo", invoke=do_start)
 
 def process_activation(queue):
-  transition(queue, "todo", "provision", do_activate)
+  transition(queue, from_state="todo", to_state="provision", invoke=do_activate)
 
 def process_entitlement(queue):
-  transition(queue, "provision", "entitlement", do_entitlement)
+  transition(queue, from_state="provision", to_state="entitlement", invoke=do_entitlement)
 
 def process_finish(queue):
-  transition(queue, "entitlement", "end", do_finish)
+  transition(queue, from_state="entitlement", to_state="end", invoke=do_finish)
 
 def create_activation(queue, device, service, token):
   data = { 'service': service, 
@@ -228,30 +228,30 @@ for i in range(len(threads)):
 device_id = "MYTV-999"
 create_account(device_id)
 # Activation with correct token
-create_activation("new-device", device_id, "NBCSports", token)
+create_activation("new-device", device_id, service1, token)
 
 # Activation with 3 incorrect tokens, so Suspend
 for i in range(4):
-  create_activation("new-device", device_id, "ABC", "")
+  create_activation("new-device", device_id, service2, "")
 
 wait_for_queues_to_empty()
 print redis.hgetall("accounts:" + device_id)
 
 # Activate again, which will generate a new token and transition to Waiting
 valid_token = generate_token()
-create_activation("new-device", device_id, "ABC", valid_token)
+create_activation("new-device", device_id, service2, valid_token)
 wait_for_queues_to_empty()
 print redis.hgetall("accounts:" + device_id)
 
 # Activation now in Waiting state, so send correct token
-create_activation("new-device", device_id, "ABC", valid_token)
+create_activation("new-device", device_id, service2, valid_token)
 wait_for_queues_to_empty()
 print redis.hgetall("accounts:" + device_id)
 
 # Since the tokens expire in 5 seconds, wait 5 seconds and try to activate the ABC again to 
 # transition into the Suspended state again
 time.sleep(token_expiration)
-create_activation("new-device", device_id, "ABC", valid_token)
+create_activation("new-device", device_id, service2, valid_token)
 
 wait_for_queues_to_empty()
 print redis.hgetall("accounts:" + device_id)
