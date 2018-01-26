@@ -80,7 +80,7 @@ def post_purchases(order_id, purchase):
 	redis.publish("purchase_orders:" + purchase['event'], order_id) 
 ```
 
-We have added the last line, so that we include the event name in the key name. This allows us to create a subscription for all or just some of the events. Lets say we have one process that wants to see all the Events and one that just wants to see "Opening Ceremony" sales.
+We have added the last line, so that we include the event name in the key name. This allows us to create a subscription for all or just some of the events. Lets say we want to have a lottery for the "Opening Ceremony" event, where every 5th purchase wins a prize, but we also want to get an alert for every non "Opening Ceremony" event.
 
 ```python
 def listener_openening_ceremony_alerter(queue):
@@ -89,21 +89,21 @@ def listener_openening_ceremony_alerter(queue):
 	p = redis.pipeline()
 	for message in l.listen():
 		order_id = message['data']
-		order = redis.hgetall("purchase_order_details:" + order_id)
-		print "===> Purchase {}: #{} ${}".format(order['event'], order['qty'], order['cost'])
+		total_orders = redis.hincrby("sales_summary", "Opening Ceremony:total_orders", 1)
+		if (total_orders % 5 == 0):
+			print "===> Winner!!!!! Opening Ceremony Lottery - Order Id: {}".format(order_id)
 
-def listener_ceremony_alerter(queue):
+def listener_event_alerter(queue):
 	l = redis.pubsub(ignore_subscribe_messages=True)
-	l.psubscribe(queue + ":* Ceremony")
+	l.psubscribe(queue + "[^(Opening Ceremony)]*")
 	p = redis.pipeline()
 	for message in l.listen():
 		order_id = message['data']
 		order = redis.hgetall("purchase_order_details:" + order_id)
 		print "Purchase {}: #{} ${}".format(order['event'], order['qty'], order['cost'])
-
 ```
 
-As you can see in the function ```listener_ceremony_alerter``` of you can see that we use the [PSUBSCRIBE](https://redis.io/commands/psubscribe) operation. This allows us to use a wildcard matching pattern, in this case to include any purchase that includes the phrase "Ceremony". If we have code to invoke these:
+The function ```listener_openening_ceremony_alerter``` uses a ```subscribe``` has we have seen before, on the fully qualified key name. However, the function ```listener_event_alerter``` uses the [PSUBSCRIBE](https://redis.io/commands/psubscribe) operation. This allows us to use a wildcard matching pattern, in this case to include any purchase that excludes the phrase "Opening Ceremony". If we have code to invoke these:
 
 ```python
 threads_2 = []
@@ -126,13 +126,13 @@ for i in range(50):
 When we run, we can see the following:
 
 ```
-Purchase Closing Ceremony: #6 $120
-Purchase Closing Ceremony: #8 $160
+Purchase Closing Ceremony: #2 $40
+Purchase Mens 4x400: #8 $160
+Purchase Mens 4x400: #5 $100
+Purchase Closing Ceremony: #5 $100
+===> Winner!!!!! Opening Ceremony Lottry - Order Id: 9I1CHS
+Purchase Opening Ceremony: #2 $40
 Purchase Closing Ceremony: #3 $60
-Purchase Opening Ceremony: #1 $20
-===> Purchase Opening Ceremony: #1 $20
-===> Purchase Opening Ceremony: #1 $20
- Purchase Opening Ceremony: #1 $20
 ```
 
 Notice that both listeners receive and act on the event, so make sure that you take in account how wild card subscriptions work.

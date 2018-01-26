@@ -112,16 +112,17 @@ def post_purchases(order_id, purchase):
 
 def listener_openening_ceremony_alerter(queue):
 	l = redis.pubsub(ignore_subscribe_messages=True)
-	l.psubscribe(queue + ":Opening Ceremony")
+	l.subscribe(queue + ":Opening Ceremony")
 	p = redis.pipeline()
 	for message in l.listen():
 		order_id = message['data']
-		order = redis.hgetall("purchase_order_details:" + order_id)
-		print "===> Purchase {}: #{} ${}".format(order['event'], order['qty'], order['cost'])
+		total_orders = redis.hincrby("sales_summary", "Opening Ceremony:total_orders", 1)
+		if (total_orders % 5 == 0):
+			print "===> Winner!!!!! Opening Ceremony Lottery - Order Id: {}".format(order_id)
 
-def listener_ceremony_alerter(queue):
+def listener_event_alerter(queue):
 	l = redis.pubsub(ignore_subscribe_messages=True)
-	l.psubscribe(queue + ":* Ceremony")
+	l.psubscribe(queue + "[^(Opening Ceremony)]*")
 	p = redis.pipeline()
 	for message in l.listen():
 		order_id = message['data']
@@ -130,7 +131,7 @@ def listener_ceremony_alerter(queue):
 
 threads_2 = []
 threads_2.append(threading.Thread(target=listener_openening_ceremony_alerter, args=("purchase_orders",)))
-threads_2.append(threading.Thread(target=listener_ceremony_alerter, args=("purchase_orders",)))
+threads_2.append(threading.Thread(target=listener_event_alerter, args=("purchase_orders",)))
 
 for i in range(len(threads_2)):
 	threads_2[i].setDaemon(True)
