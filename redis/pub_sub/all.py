@@ -17,13 +17,13 @@ def generate_order_id():
 def create_event(event_name):
 	redis.hmset("events:" + event_name, {'event': event_name})
 
-def purchase(event):
+def purchase(event_name):
 	qty = random.randrange(1, 10)
 	price = 20
 	order_id = generate_order_id()
 	purchase = { 'who': "Jim", 'qty': qty, 'ts': long(time.time()), 'cost': qty * price, 
                'order_id': order_id, 'event': event_name }
-  post_purchases(purchase)
+	post_purchases(order_id, purchase)
 
 def post_purchases(order_id, purchase):
 	redis.hmset("purchase_order_details:" + order_id, purchase)
@@ -66,7 +66,9 @@ def listener_customer_purchases(queue):
 		p.execute()
 
 def print_statistics():
-	while True:	
+	end_time = time.time() + 30
+	print "\n === START"
+	while time.time() < end_time:	
 		print "\n======== {}".format(time.strftime("%a, %d %b %Y %H:%M:%S"))
 		for event in redis.scan_iter(match="events:*"):
 			(_, event_name) = event.split(":")  
@@ -81,7 +83,9 @@ def print_statistics():
 			  print " {}/{}".format(i, total_sales),
 			print "\n"
 		time.sleep(1)
+	print "\n === END"
 
+# Part One - simple publish & subscribe
 threads = []
 threads.append(threading.Thread(target=listener_sales_analytics, args=("purchase_orders",)))
 threads.append(threading.Thread(target=listener_events_analytics, args=("purchase_orders",)))
@@ -93,10 +97,50 @@ for i in range(len(threads)):
 	threads[i].start()
 
 events = ["Womens Judo", "Mens 4x400"]
-create_event(events[0])
-create_event(events[1])
+for e in events:
+	create_event(e)
 
 for i in range(50):
-	purchase(events[random.randrange(0,2)])
+	purchase(events[random.randrange(0, len(events))])
+	time.sleep(random.random())
+
+# Part Two - pattern subscriptions
+def post_purchases(order_id, purchase):
+	redis.hmset("purchase_order_details:" + order_id, purchase)
+	redis.publish("purchase_orders", order_id) 
+	redis.publish("purchase_orders:" + purchase['event'], order_id) 
+
+def listener_openening_ceremony_alerter(queue):
+	l = redis.pubsub(ignore_subscribe_messages=True)
+	l.psubscribe(queue + ":Opening Ceremony")
+	p = redis.pipeline()
+	for message in l.listen():
+		order_id = message['data']
+		order = redis.hgetall("purchase_order_details:" + order_id)
+		print "===> Purchase {}: #{} ${}".format(order['event'], order['qty'], order['cost'])
+
+def listener_ceremony_alerter(queue):
+	l = redis.pubsub(ignore_subscribe_messages=True)
+	l.psubscribe(queue + ":* Ceremony")
+	p = redis.pipeline()
+	for message in l.listen():
+		order_id = message['data']
+		order = redis.hgetall("purchase_order_details:" + order_id)
+		print "Purchase {}: #{} ${}".format(order['event'], order['qty'], order['cost'])
+
+threads_2 = []
+threads_2.append(threading.Thread(target=listener_openening_ceremony_alerter, args=("purchase_orders",)))
+threads_2.append(threading.Thread(target=listener_ceremony_alerter, args=("purchase_orders",)))
+
+for i in range(len(threads_2)):
+	threads_2[i].setDaemon(True)
+	threads_2[i].start()
+
+events = ["Womens Judo", "Mens 4x400", "Opening Ceremony", "Closing Ceremony"]
+for e in events:
+	create_event(e)
+
+for i in range(50):
+	purchase(events[random.randrange(0, len(events))])
 	time.sleep(random.random())
 
