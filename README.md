@@ -11,7 +11,7 @@ The repository contains a number of worked example for data modeling these commo
 * Credit / Debit
 * Reparenting, bi­-directional associations
 
-Assuming you come from an RDBMS background, how do you model these structures in a NoSQL database? This repository covers possible impelmewntations (and limitations) with the following Databases
+Assuming you come from an RDBMS background, how do you model these structures in a NoSQL database? This repository covers possible implementations (and limitations) with the following Databases
 
 * [Aerospike](aerospike/README.md)
 * [Redis](redis/README.md) (in progress)
